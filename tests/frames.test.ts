@@ -61,3 +61,12 @@ describe("stepFrameTime", () => {
     expect(stepFrameTime(0, undefined, 1, 5)).toBeCloseTo(1.5 / 60);
   });
 });
+
+describe("formatTimecode", () => {
+  it("shows hundredths", async () => {
+    const { formatTimecode } = await import("@/lib/utils");
+    expect(formatTimecode(2.48)).toBe("0:02.48");
+    expect(formatTimecode(65.059)).toBe("1:05.05");
+    expect(formatTimecode(Number.NaN)).toBe("0:00.00");
+  });
+});

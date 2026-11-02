@@ -126,24 +126,3 @@ export interface AnalysisSession {
   annotations: Record<PaneId, AnnotationObject[]>;
   snapshotMarkers: SnapshotMarker[];
 }
-
-/** Cross-pane coordination messages; `version` makes repeated identical signals distinct. */
-export interface SyncSignal {
-  paneId: PaneId;
-  time: number;
-  version: number;
-}
-
-export interface PlaybackSignal {
-  paneId: PaneId;
-  action: "play" | "pause" | "seek" | "rate";
-  time?: number;
-  rate?: number;
-  version: number;
-}
-
-export interface MarkerSeekSignal {
-  paneId: PaneId;
-  time: number;
-  version: number;
-}

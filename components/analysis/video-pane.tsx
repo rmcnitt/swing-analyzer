@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent, type WheelEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type PointerEvent,
+  type WheelEvent,
+} from "react";
 import {
   Check,
   Pencil,
@@ -15,23 +22,27 @@ import {
 } from "lucide-react";
 import { AnnotationCanvas } from "@/components/analysis/annotation-canvas";
 import { Timeline } from "@/components/analysis/timeline";
-import { DEFAULT_FPS, frameRateChoices, stepFrameTime } from "@/lib/analysis/frames";
-import { shouldSyncToLeader } from "@/lib/analysis/sync";
+import {
+  DEFAULT_FPS,
+  frameDuration,
+  frameIndexAt,
+  frameRateChoices,
+  stepFrameTime,
+} from "@/lib/analysis/frames";
+import type { SyncGroup, SyncMedia } from "@/lib/analysis/sync-group";
 import { detectVideoFps } from "@/lib/video/media";
+import { createTimeStore, type TimeStore } from "@/lib/video/time-store";
 import { getContainedStageSize, getVideoAspectRatio } from "@/lib/video-layout";
 import type {
   AnalysisPane,
   AnnotationObject,
   AnnotationTool,
   HexColor,
-  MarkerSeekSignal,
   PaneId,
-  PlaybackSignal,
   SnapshotMarker,
-  SyncSignal,
   VideoAsset,
 } from "@/lib/types";
-import { cn, formatDuration, getVideoLabel } from "@/lib/utils";
+import { clamp, cn, formatTimecode, getVideoLabel } from "@/lib/utils";
 
 interface VideoPaneProps {
   pane: AnalysisPane;
@@ -43,10 +54,8 @@ interface VideoPaneProps {
   activeColor: HexColor;
   selectedAnnotationId?: string | null;
   isActive: boolean;
-  syncEnabled: boolean;
-  syncSignal: SyncSignal | null;
-  playbackSignal: PlaybackSignal | null;
-  markerSeekSignal: MarkerSeekSignal | null;
+  /** Shared playback coordinator; the pane registers its video and routes transport through it. */
+  syncGroup: SyncGroup;
   compareMode?: boolean;
   isComparisonPane?: boolean;
   onActivate: (paneId: PaneId) => void;
@@ -63,11 +72,7 @@ interface VideoPaneProps {
   onRenameVideo: (videoId: string, title: string) => void;
   onSetVideoFps: (videoId: string, fps: number, source: "detected" | "manual") => void;
   onUpdatePane: (paneId: PaneId, patch: Partial<AnalysisPane>) => void;
-  onEmitSync: (paneId: PaneId, time: number) => void;
-  onEmitPlayback: (
-    paneId: PaneId,
-    command: Omit<PlaybackSignal, "paneId" | "version">,
-  ) => void;
+  onChangeRate: (paneId: PaneId, rate: number) => void;
   onSelectionChange: (paneId: PaneId, annotationId: string | null) => void;
   onAnnotationsChange: (paneId: PaneId, annotations: AnnotationObject[]) => void;
 }
@@ -84,10 +89,7 @@ export function VideoPane({
   activeColor,
   selectedAnnotationId,
   isActive,
-  syncEnabled,
-  syncSignal,
-  playbackSignal,
-  markerSeekSignal,
+  syncGroup,
   compareMode = false,
   isComparisonPane = false,
   onActivate,
@@ -97,14 +99,12 @@ export function VideoPane({
   onRenameVideo,
   onSetVideoFps,
   onUpdatePane,
-  onEmitSync,
-  onEmitPlayback,
+  onChangeRate,
   onSelectionChange,
   onAnnotationsChange,
 }: VideoPaneProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaViewportRef = useRef<HTMLDivElement | null>(null);
-  const suppressSyncEchoRef = useRef(false);
   const panStartRef = useRef<{
     pointerX: number;
     pointerY: number;
@@ -112,6 +112,45 @@ export function VideoPane({
     panY: number;
   } | null>(null);
   const [duration, setDuration] = useState(video?.duration ?? 0);
+  // Playhead lives outside React state; only the transport bar subscribes to per-frame updates.
+  const [timeStore] = useState(() => createTimeStore(pane.currentTime));
+  const baseRateRef = useRef(pane.playbackRate);
+  const rateMultiplierRef = useRef(1);
+  const [media] = useState<SyncMedia>(() => ({
+    get currentTime() {
+      return videoRef.current?.currentTime ?? 0;
+    },
+    get paused() {
+      return videoRef.current?.paused ?? true;
+    },
+    get ended() {
+      return videoRef.current?.ended ?? false;
+    },
+    play() {
+      void videoRef.current?.play().catch(() => undefined);
+    },
+    pause() {
+      videoRef.current?.pause();
+    },
+    seek(time: number) {
+      const element = videoRef.current;
+
+      if (!element) {
+        return;
+      }
+
+      element.currentTime = clamp(time, 0, Number.isFinite(element.duration) ? element.duration : time);
+      timeStore.set(element.currentTime);
+    },
+    setRateMultiplier(multiplier: number) {
+      const element = videoRef.current;
+      rateMultiplierRef.current = multiplier;
+
+      if (element) {
+        element.playbackRate = baseRateRef.current * multiplier;
+      }
+    },
+  }));
   const [isPlaying, setIsPlaying] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -144,13 +183,65 @@ export function VideoPane({
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => syncGroup.register(pane.id, media), [syncGroup, pane.id, media]);
+
   useEffect(() => {
-    if (!videoRef.current) {
+    baseRateRef.current = pane.playbackRate;
+    const element = videoRef.current;
+
+    if (element) {
+      element.defaultPlaybackRate = pane.playbackRate;
+      element.playbackRate = pane.playbackRate * rateMultiplierRef.current;
+    }
+  }, [pane.playbackRate]);
+
+  // While playing, report every presented frame: drives the playhead and follower correction.
+  useEffect(() => {
+    const element = videoRef.current;
+
+    if (!isPlaying || !element) {
       return;
     }
 
-    videoRef.current.playbackRate = pane.playbackRate;
-  }, [pane.playbackRate]);
+    let cancelled = false;
+    const report = (time: number) => {
+      timeStore.set(time);
+      syncGroup.onFrame(pane.id, time);
+    };
+
+    // Not in older Firefox/Safari; fall back to sampling currentTime each animation frame.
+    if (typeof element.requestVideoFrameCallback === "function") {
+      const onFrame: VideoFrameRequestCallback = (_now, metadata) => {
+        if (cancelled) {
+          return;
+        }
+
+        report(metadata.mediaTime);
+        handle = element.requestVideoFrameCallback(onFrame);
+      };
+      let handle = element.requestVideoFrameCallback(onFrame);
+
+      return () => {
+        cancelled = true;
+        element.cancelVideoFrameCallback(handle);
+      };
+    }
+
+    const onAnimationFrame = () => {
+      if (cancelled) {
+        return;
+      }
+
+      report(element.currentTime);
+      handle = window.requestAnimationFrame(onAnimationFrame);
+    };
+    let handle = window.requestAnimationFrame(onAnimationFrame);
+
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(handle);
+    };
+  }, [isPlaying, pane.id, syncGroup, timeStore]);
 
   // Legacy imports and samples have a guessed fps; measure it once in the background.
   const fpsDetectionAttemptedRef = useRef(new Set<string>());
@@ -180,74 +271,7 @@ export function VideoPane({
     });
   }, [video?.id, video?.title]);
 
-  useEffect(() => {
-    const element = videoRef.current;
-
-    if (!element) {
-      return;
-    }
-
-    if (!syncEnabled || !syncSignal || syncSignal.paneId === pane.id) {
-      return;
-    }
-
-    const next = shouldSyncToLeader(syncSignal.time, element.currentTime);
-
-    if (next.shouldSeek) {
-      suppressSyncEchoRef.current = true;
-      element.currentTime = next.nextTime;
-      onUpdatePane(pane.id, { currentTime: next.nextTime });
-    }
-  }, [syncEnabled, syncSignal, pane.id, onUpdatePane]);
-
-  useEffect(() => {
-    const element = videoRef.current;
-
-    if (!element || !syncEnabled || !playbackSignal || playbackSignal.paneId === pane.id) {
-      return;
-    }
-
-    if (playbackSignal.rate) {
-      element.playbackRate = playbackSignal.rate;
-      onUpdatePane(pane.id, { playbackRate: playbackSignal.rate });
-    }
-
-    if (typeof playbackSignal.time === "number") {
-      suppressSyncEchoRef.current = true;
-      element.currentTime = Math.max(0, Math.min(playbackSignal.time, duration || element.duration || 0));
-      onUpdatePane(pane.id, { currentTime: element.currentTime });
-    }
-
-    if (playbackSignal.action === "play") {
-      void element.play();
-    }
-
-    if (playbackSignal.action === "pause") {
-      element.pause();
-    }
-  }, [duration, pane.id, playbackSignal, syncEnabled, onUpdatePane]);
-
-  useEffect(() => {
-    const element = videoRef.current;
-
-    if (!element || !markerSeekSignal || markerSeekSignal.paneId !== pane.id) {
-      return;
-    }
-
-    const nextTime = Math.max(0, Math.min(markerSeekSignal.time, duration || element.duration || 0));
-    element.currentTime = nextTime;
-    onUpdatePane(pane.id, { currentTime: nextTime });
-
-    if (syncEnabled) {
-      onEmitSync(pane.id, nextTime);
-      onEmitPlayback(pane.id, {
-        action: "seek",
-        time: nextTime,
-      });
-    }
-  }, [duration, markerSeekSignal, onEmitPlayback, onEmitSync, onUpdatePane, pane.id, syncEnabled]);
-
-  const togglePlayback = async () => {
+  const togglePlayback = () => {
     const element = videoRef.current;
 
     if (!element) {
@@ -255,46 +279,14 @@ export function VideoPane({
     }
 
     if (element.paused) {
-      await element.play();
-      setIsPlaying(true);
-      if (syncEnabled) {
-        onEmitPlayback(pane.id, {
-          action: "play",
-          time: element.currentTime,
-          rate: pane.playbackRate,
-        });
-      }
-      return;
-    }
-
-    element.pause();
-    setIsPlaying(false);
-    if (syncEnabled) {
-      onEmitPlayback(pane.id, {
-        action: "pause",
-        time: element.currentTime,
-        rate: pane.playbackRate,
-      });
+      syncGroup.play(pane.id);
+    } else {
+      syncGroup.pause(pane.id);
     }
   };
 
   const seekTo = (time: number) => {
-    const element = videoRef.current;
-
-    if (!element) {
-      return;
-    }
-
-    element.currentTime = Math.max(0, Math.min(time, duration));
-    onUpdatePane(pane.id, { currentTime: element.currentTime });
-
-    if (syncEnabled) {
-      onEmitSync(pane.id, element.currentTime);
-      onEmitPlayback(pane.id, {
-        action: "seek",
-        time: element.currentTime,
-      });
-    }
+    syncGroup.seek(pane.id, time);
   };
 
   const stepBy = (direction: -1 | 1) => {
@@ -304,27 +296,25 @@ export function VideoPane({
       return;
     }
 
-    element.pause();
+    if (!element.paused) {
+      syncGroup.pause(pane.id);
+    }
+
     seekTo(stepFrameTime(element.currentTime, video?.fps, direction, duration || element.duration || 0));
   };
 
-  const handleTimeUpdate = () => {
+  /** Saves the playhead into the session only when it comes to rest (not per frame). */
+  const syncTimeFromElement = () => {
     const element = videoRef.current;
 
     if (!element) {
       return;
     }
 
-    const currentTime = element.currentTime;
-    onUpdatePane(pane.id, { currentTime });
+    timeStore.set(element.currentTime);
 
-    if (suppressSyncEchoRef.current) {
-      suppressSyncEchoRef.current = false;
-      return;
-    }
-
-    if (syncEnabled) {
-      onEmitSync(pane.id, currentTime);
+    if (element.paused) {
+      onUpdatePane(pane.id, { currentTime: Number(element.currentTime.toFixed(4)) });
     }
   };
 
@@ -335,16 +325,6 @@ export function VideoPane({
     stageAspectRatio,
   );
 
-  const handlePlaybackRateChange = (rate: number) => {
-    onUpdatePane(pane.id, { playbackRate: rate });
-
-    if (syncEnabled) {
-      onEmitPlayback(pane.id, {
-        action: "rate",
-        rate,
-      });
-    }
-  };
   const canRenameVideo = Boolean(video);
   const userVideos = videos.filter((option) => option.sourceType !== "reference");
   const referenceVideos = videos.filter((option) => option.sourceType === "reference");
@@ -633,6 +613,18 @@ export function VideoPane({
 
                     setDuration(nextDuration);
 
+                    if (element) {
+                      // Loading a source resets the rate; restore it and the saved position.
+                      element.defaultPlaybackRate = baseRateRef.current;
+                      element.playbackRate = baseRateRef.current * rateMultiplierRef.current;
+
+                      if (pane.currentTime > 0 && pane.currentTime < nextDuration) {
+                        element.currentTime = pane.currentTime;
+                      }
+
+                      timeStore.set(element.currentTime);
+                    }
+
                     if (video.id) {
                       onVideoMetadata(video.id, {
                         duration: nextDuration,
@@ -641,9 +633,13 @@ export function VideoPane({
                       });
                     }
                   }}
-                  onTimeUpdate={handleTimeUpdate}
+                  onSeeked={syncTimeFromElement}
                   onPlay={() => setIsPlaying(true)}
-                  onPause={() => setIsPlaying(false)}
+                  onPause={() => {
+                    setIsPlaying(false);
+                    syncTimeFromElement();
+                  }}
+                  onEnded={() => syncGroup.onEnded(pane.id)}
                 />
 
                 <AnnotationCanvas
@@ -695,28 +691,13 @@ export function VideoPane({
               <SkipForward className="size-4" />
             </button>
 
-            <div className="min-w-0 flex-1 px-2">
-              <input
-                type="range"
-                min={0}
-                max={duration || 0}
-                step={0.01}
-                value={Math.min(pane.currentTime, duration || 0)}
-                onChange={(event) => seekTo(Number(event.target.value))}
-                className="h-1.5 w-full cursor-pointer appearance-none bg-white/15 accent-[color:var(--color-accent)]"
-                aria-label="Scrub video"
-              />
-              <Timeline
-                currentTime={pane.currentTime}
-                duration={duration}
-                markers={markers}
-                onSeek={seekTo}
-              />
-            </div>
-
-            <p className="hidden min-w-24 text-right font-mono text-xs text-[color:var(--color-muted)] sm:block">
-              {formatDuration(pane.currentTime)} / {formatDuration(duration)}
-            </p>
+            <PlaybackTransport
+              timeStore={timeStore}
+              duration={duration}
+              fps={video?.fps}
+              markers={markers}
+              onSeek={seekTo}
+            />
 
             {video ? (
               <select
@@ -740,7 +721,7 @@ export function VideoPane({
 
             <select
               value={pane.playbackRate}
-              onChange={(event) => handlePlaybackRateChange(Number(event.target.value))}
+              onChange={(event) => onChangeRate(pane.id, Number(event.target.value))}
               className="h-8 border border-[color:var(--color-border)] bg-[#0b0c0e] px-2 font-mono text-xs text-white outline-none"
               aria-label="Playback speed"
             >
@@ -754,5 +735,44 @@ export function VideoPane({
         </div>
       </div>
     </section>
+  );
+}
+
+function PlaybackTransport({
+  timeStore,
+  duration,
+  fps,
+  markers,
+  onSeek,
+}: {
+  timeStore: TimeStore;
+  duration: number;
+  fps?: number;
+  markers: SnapshotMarker[];
+  onSeek: (time: number) => void;
+}) {
+  const currentTime = useSyncExternalStore(timeStore.subscribe, timeStore.get, () => 0);
+
+  return (
+    <>
+      <div className="min-w-0 flex-1 px-2">
+        <input
+          type="range"
+          min={0}
+          max={duration || 0}
+          step={frameDuration(fps)}
+          value={Math.min(currentTime, duration || 0)}
+          onChange={(event) => onSeek(Number(event.target.value))}
+          className="h-1.5 w-full cursor-pointer appearance-none bg-white/15 accent-[color:var(--color-accent)]"
+          aria-label="Scrub video"
+        />
+        <Timeline currentTime={currentTime} duration={duration} markers={markers} onSeek={onSeek} />
+      </div>
+
+      <p className="hidden min-w-32 text-right font-mono text-xs text-[color:var(--color-muted)] sm:block">
+        {formatTimecode(currentTime)} / {formatTimecode(duration)}
+        <span className="ml-1.5 text-[10px] opacity-70">F{frameIndexAt(currentTime, fps)}</span>
+      </p>
+    </>
   );
 }

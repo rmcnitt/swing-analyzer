@@ -31,15 +31,13 @@ import type {
   AnnotationObject,
   AnnotationTool,
   HexColor,
-  MarkerSeekSignal,
   PaneId,
-  PlaybackSignal,
   SnapshotMarker,
-  SyncSignal,
   VideoAsset,
 } from "@/lib/types";
 import { createId, uniqueById } from "@/lib/utils";
 import { DEFAULT_FPS } from "@/lib/analysis/frames";
+import { SyncGroup } from "@/lib/analysis/sync-group";
 import { createVideoThumbnail, detectVideoFps, readVideoMetadata, type VideoFileMetadata } from "@/lib/video/media";
 
 interface AnalysisWorkspaceProps {
@@ -132,6 +130,7 @@ function loadReferenceIntoSecondary(
     panes: replacePane(session.panes, "secondary", {
       videoId: video.id,
       label: video.title ? `${video.title} (reference)` : "Reference",
+      currentTime: 0,
     }),
   };
 }
@@ -185,9 +184,7 @@ function WorkspaceView({
   >({});
   const [undoStack, setUndoStack] = useState<Array<Record<PaneId, AnnotationObject[]>>>([]);
   const [redoStack, setRedoStack] = useState<Array<Record<PaneId, AnnotationObject[]>>>([]);
-  const [syncSignal, setSyncSignal] = useState<SyncSignal | null>(null);
-  const [playbackSignal, setPlaybackSignal] = useState<PlaybackSignal | null>(null);
-  const [markerSeekSignal, setMarkerSeekSignal] = useState<MarkerSeekSignal | null>(null);
+  const [syncGroup] = useState(() => new SyncGroup());
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const compareMode = searchParams.get("compare") === "true";
@@ -204,6 +201,10 @@ function WorkspaceView({
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }, [initialReferenceId, pathname, router]);
+
+  useEffect(() => {
+    syncGroup.setEnabled(session.syncEnabled);
+  }, [syncGroup, session.syncEnabled]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -325,6 +326,7 @@ function WorkspaceView({
   const handleSelectVideo = (paneId: PaneId, videoId: string) => {
     updatePane(paneId, {
       videoId: videoId || undefined,
+      currentTime: 0,
     });
 
     setSession((current) => ({
@@ -368,7 +370,8 @@ function WorkspaceView({
   };
 
   const handleAddMarker = (label?: string) => {
-    const activeTime = activePane?.currentTime ?? 0;
+    const activeTime =
+      syncGroup.get(effectiveActivePaneId)?.currentTime ?? activePane?.currentTime ?? 0;
 
     setSession((current) => ({
       ...current,
@@ -378,7 +381,7 @@ function WorkspaceView({
           id: createId("marker"),
           paneId: effectiveActivePaneId,
           label: label?.trim() || `Checkpoint ${current.snapshotMarkers.length + 1}`,
-          time: Number(activeTime.toFixed(2)),
+          time: Number(activeTime.toFixed(4)),
         },
       ],
     }));
@@ -386,11 +389,13 @@ function WorkspaceView({
 
   const handleSeekMarker = (marker: SnapshotMarker) => {
     setActivePaneId(marker.paneId);
-    setMarkerSeekSignal((current) => ({
-      paneId: marker.paneId,
-      time: marker.time,
-      version: (current?.version ?? 0) + 1,
-    }));
+
+    // Jumping to a position means studying it: stop there (and align the other pane if synced).
+    if (syncGroup.get(marker.paneId)?.paused === false) {
+      syncGroup.pause(marker.paneId);
+    }
+
+    syncGroup.seek(marker.paneId, marker.time);
   };
 
   const handleRenameMarker = (markerId: string, label: string) => {
@@ -460,30 +465,11 @@ function WorkspaceView({
     [reloadVideos],
   );
 
-  const handleEmitSync = useCallback((paneId: PaneId, time: number) => {
-    setSyncSignal((current) => {
-      if (current?.paneId === paneId && Math.abs(current.time - time) < 0.01) {
-        return current;
-      }
-
-      return {
-        paneId,
-        time,
-        version: (current?.version ?? 0) + 1,
-      };
-    });
-  }, []);
-
-  const handleEmitPlayback = useCallback(
-    (paneId: PaneId, command: Omit<PlaybackSignal, "paneId" | "version">) => {
-      setPlaybackSignal((current) => ({
-        ...command,
-        paneId,
-        version: (current?.version ?? 0) + 1,
-      }));
-    },
-    [],
-  );
+  const handleChangeRate = (paneId: PaneId, rate: number) => {
+    // With sync on, both panes share a speed so the leader isn't constantly correcting.
+    const targets: PaneId[] = session.syncEnabled ? ["primary", "secondary"] : [paneId];
+    targets.forEach((id) => updatePane(id, { playbackRate: rate }));
+  };
 
   const handleSetCompareMode = (nextCompareMode: boolean) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -639,10 +625,7 @@ function WorkspaceView({
                 activeColor={activeColor}
                 selectedAnnotationId={selectedAnnotationByPane[pane.id] ?? null}
                 isActive={effectiveActivePaneId === pane.id}
-                syncEnabled={session.syncEnabled}
-                syncSignal={syncSignal}
-                playbackSignal={playbackSignal}
-                markerSeekSignal={markerSeekSignal}
+                syncGroup={syncGroup}
                 compareMode={compareMode}
                 isComparisonPane={pane.id === "secondary"}
                 onActivate={setActivePaneId}
@@ -652,8 +635,7 @@ function WorkspaceView({
                 onRenameVideo={handleRenameVideo}
                 onSetVideoFps={handleSetVideoFps}
                 onUpdatePane={updatePane}
-                onEmitSync={handleEmitSync}
-                onEmitPlayback={handleEmitPlayback}
+                onChangeRate={handleChangeRate}
                 onSelectionChange={(paneId, annotationId) => {
                   setActivePaneId(paneId);
                   setSelectedAnnotationByPane((current) => ({

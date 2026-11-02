@@ -13,6 +13,19 @@ export function formatDuration(seconds: number) {
   return `${minutes}:${remainder}`;
 }
 
+/** m:ss.cc, e.g. 0:02.48 — swing clips need sub-second precision. */
+export function formatTimecode(seconds: number) {
+  const safe = Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
+  const totalHundredths = Math.floor(safe * 100 + 1e-6);
+  const minutes = Math.floor(totalHundredths / 6000);
+  const secondsPart = Math.floor((totalHundredths % 6000) / 100)
+    .toString()
+    .padStart(2, "0");
+  const hundredths = (totalHundredths % 100).toString().padStart(2, "0");
+
+  return `${minutes}:${secondsPart}.${hundredths}`;
+}
+
 export function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) {
     return "0 B";
