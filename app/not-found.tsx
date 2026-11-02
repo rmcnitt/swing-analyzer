@@ -15,10 +15,10 @@ export default function NotFound() {
           flow from the landing page.
         </p>
         <Link
-          href="/dashboard"
+          href="/"
           className="mt-8 inline-flex rounded-full bg-[color:var(--color-accent)] px-5 py-3 text-sm font-semibold text-[color:var(--color-ink)]"
         >
-          Back to dashboard
+          Back to hub
         </Link>
       </main>
     </div>
