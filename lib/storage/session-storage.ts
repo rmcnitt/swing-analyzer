@@ -1,7 +1,8 @@
 "use client";
 
 import type { AnalysisSession, VideoAsset } from "@/lib/types";
-import { sessionSchema, videoSchema } from "@/lib/validation";
+import { salvageSession } from "@/lib/storage/session-salvage";
+import { videoSchema } from "@/lib/validation";
 
 const dbName = "swing-analyzer-local-library";
 const dbVersion = 2;
@@ -155,20 +156,35 @@ export async function initializeLocalLibrary(seed: {
   await putRecord(metaStoreName, "true", seededKey);
 }
 
-export async function loadStoredSession(sessionId: string) {
-  const record = await runStore<AnalysisSession>(sessionStoreName, "readonly", (store) =>
+export type StoredSessionResult =
+  | { status: "found"; session: AnalysisSession; droppedCount: number }
+  | { status: "missing" }
+  | { status: "corrupt" };
+
+export async function loadStoredSession(sessionId: string): Promise<StoredSessionResult> {
+  const record = await runStore<unknown>(sessionStoreName, "readonly", (store) =>
     store.get(sessionId),
   );
 
   if (!record) {
-    return null;
+    return { status: "missing" };
   }
 
-  try {
-    return sessionSchema.parse(record);
-  } catch {
-    return null;
+  const salvaged = salvageSession(record);
+
+  if (!salvaged) {
+    // Keep the raw record so nothing is lost if a later version can read it.
+    await putRecord(metaStoreName, record, `corrupt-session:${sessionId}`);
+    return { status: "corrupt" };
   }
+
+  if (salvaged.droppedCount > 0) {
+    console.warn(
+      `Session ${sessionId}: dropped ${salvaged.droppedCount} invalid annotation(s)/marker(s).`,
+    );
+  }
+
+  return { status: "found", ...salvaged };
 }
 
 export async function saveStoredSession(session: AnalysisSession) {
@@ -176,16 +192,10 @@ export async function saveStoredSession(session: AnalysisSession) {
 }
 
 export async function loadStoredSessions() {
-  const records = await getAllRecords<AnalysisSession>(sessionStoreName);
+  const records = await getAllRecords<unknown>(sessionStoreName);
 
   return records
-    .map((record) => {
-      try {
-        return sessionSchema.parse(record);
-      } catch {
-        return null;
-      }
-    })
+    .map((record) => salvageSession(record)?.session ?? null)
     .filter((session): session is AnalysisSession => Boolean(session));
 }
 

@@ -46,6 +46,79 @@ import { createId, uniqueById } from "@/lib/utils";
 import { createVideoThumbnail, readVideoMetadata, type VideoFileMetadata } from "@/lib/video/media";
 
 interface AnalysisWorkspaceProps {
+  sessionId: string;
+  /** Bundled sample session used when IndexedDB has no copy yet; null for user sessions. */
+  seedSession: AnalysisSession | null;
+  initialVideos: VideoAsset[];
+  proSwings?: ProSwingReference[];
+}
+
+type LoadState =
+  | { status: "loading" }
+  | { status: "ready"; session: AnalysisSession }
+  | { status: "missing" }
+  | { status: "corrupt" };
+
+/** Loads the session from IndexedDB before mounting the workspace, so nothing renders or
+ * autosaves with placeholder data. */
+export function AnalysisWorkspace({ sessionId, seedSession, ...rest }: AnalysisWorkspaceProps) {
+  const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void loadStoredSession(sessionId).then((result) => {
+      if (cancelled) {
+        return;
+      }
+
+      const lastOpenedAt = new Date().toISOString();
+
+      if (result.status === "found") {
+        setLoadState({ status: "ready", session: { ...result.session, lastOpenedAt } });
+      } else if (result.status === "missing" && seedSession) {
+        setLoadState({ status: "ready", session: { ...seedSession, lastOpenedAt } });
+      } else {
+        setLoadState({ status: result.status === "corrupt" ? "corrupt" : "missing" });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, seedSession]);
+
+  if (loadState.status === "ready") {
+    return <WorkspaceView key={loadState.session.id} initialSession={loadState.session} {...rest} />;
+  }
+
+  return (
+    <div className="flex h-screen flex-col items-center justify-center gap-3 bg-[#07080a] px-4 text-center text-white">
+      {loadState.status === "loading" ? (
+        <p className="text-sm text-[color:var(--color-muted)]">Loading session…</p>
+      ) : (
+        <>
+          <h1 className="text-base font-semibold">
+            {loadState.status === "missing" ? "Session not found" : "This session couldn't be read"}
+          </h1>
+          <p className="max-w-sm text-sm text-[color:var(--color-muted)]">
+            {loadState.status === "missing"
+              ? "It may have been deleted, or it was saved in a different browser. Sessions live only in the browser where they were created."
+              : "The saved data is damaged. A backup copy was kept in this browser's storage."}
+          </p>
+          <Link
+            href="/"
+            className="mt-2 flex h-9 items-center bg-[color:var(--color-accent)] px-3 text-sm font-semibold text-[color:var(--color-ink)]"
+          >
+            Back to swings
+          </Link>
+        </>
+      )}
+    </div>
+  );
+}
+
+interface WorkspaceViewProps {
   initialSession: AnalysisSession;
   initialVideos: VideoAsset[];
   proSwings?: ProSwingReference[];
@@ -68,11 +141,11 @@ function panePatchIsNoOp(pane: AnalysisPane, patch: Partial<AnalysisPane>) {
   });
 }
 
-export function AnalysisWorkspace({
+function WorkspaceView({
   initialSession,
   initialVideos,
   proSwings = proSwingReferences,
-}: AnalysisWorkspaceProps) {
+}: WorkspaceViewProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -94,20 +167,11 @@ export function AnalysisWorkspace({
   const [markerSeekSignal, setMarkerSeekSignal] = useState<MarkerSeekSignal | null>(null);
   const [proSwingOverrides, setProSwingOverrides] = useState(loadProSwingOverrides);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
-  const [hydrated, setHydrated] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const compareMode = searchParams.get("compare") === "true";
   const effectiveActivePaneId = compareMode ? activePaneId : "primary";
 
   useEffect(() => {
-    void loadStoredSession(initialSession.id).then((stored) => {
-      if (stored) {
-        setSession(stored);
-      }
-
-      setHydrated(true);
-    });
-
     void Promise.resolve().then(() => {
       const storedTool = loadUiPreference("active-tool") as AnnotationTool | null;
       const storedColor = loadUiPreference("active-color");
@@ -123,20 +187,16 @@ export function AnalysisWorkspace({
 
     void loadStoredVideos().then((storedVideos) => setUploadedVideos(storedVideos));
     void Promise.resolve().then(() => setProSwingOverrides(loadProSwingOverrides()));
-  }, [initialSession.id]);
+  }, []);
 
   useEffect(() => {
-    if (!hydrated) {
-      return;
-    }
-
     const timeout = window.setTimeout(() => {
       void saveStoredSession(session);
       setLastSavedAt(new Date().toISOString());
     }, 900);
 
     return () => window.clearTimeout(timeout);
-  }, [session, hydrated]);
+  }, [session]);
 
   const videos = uniqueById([...uploadedVideos, ...initialVideos]).map((video) => ({
     ...video,

@@ -1,5 +1,5 @@
 import type { AnnotationGeometry, AnnotationObject, Point } from "@/lib/types";
-import { createId } from "@/lib/utils";
+import { clamp, createId } from "@/lib/utils";
 import { annotationSchema } from "@/lib/validation";
 
 interface StageSize {
@@ -117,6 +117,67 @@ export function geometryToNormalized(
   }
 }
 
+/**
+ * Radius is normalized by the frame's shorter side, so a circle on a portrait (9:16) clip can
+ * legitimately exceed 1. 2 covers the frame diagonal for any aspect ratio up to ~1:1.7 and
+ * anything larger is off-frame anyway.
+ */
+export const MAX_NORMALIZED_RADIUS = 2;
+
+function clampUnit(value: number) {
+  return Number.isFinite(value) ? clamp(value, 0, 1) : 0;
+}
+
+function clampPoint(point: Point): Point {
+  return { x: clampUnit(point.x), y: clampUnit(point.y) };
+}
+
+/**
+ * Forces normalized geometry into the frame. Pointer positions can land slightly outside the
+ * stage (fast drags, sub-pixel rounding), and out-of-range values used to fail validation on
+ * load, which discarded the entire session.
+ */
+export function clampGeometry(geometry: AnnotationGeometry): AnnotationGeometry {
+  switch (geometry.kind) {
+    case "line":
+    case "arrow":
+      return {
+        kind: geometry.kind,
+        points: [clampPoint(geometry.points[0]), clampPoint(geometry.points[1])],
+      };
+    case "rectangle": {
+      const origin = clampPoint(geometry.origin);
+      return {
+        kind: "rectangle",
+        origin,
+        size: {
+          width: clamp(clampUnit(geometry.size.width), 0, 1 - origin.x),
+          height: clamp(clampUnit(geometry.size.height), 0, 1 - origin.y),
+        },
+      };
+    }
+    case "circle":
+      return {
+        kind: "circle",
+        center: clampPoint(geometry.center),
+        radius: Number.isFinite(geometry.radius)
+          ? clamp(geometry.radius, 0, MAX_NORMALIZED_RADIUS)
+          : 0,
+      };
+    case "angle":
+      return {
+        kind: "angle",
+        points: [
+          clampPoint(geometry.points[0]),
+          clampPoint(geometry.points[1]),
+          clampPoint(geometry.points[2]),
+        ],
+      };
+    case "freehand":
+      return { kind: "freehand", points: geometry.points.map(clampPoint) };
+  }
+}
+
 export function serializeAnnotations(annotations: AnnotationObject[]) {
   return JSON.stringify(annotations);
 }
@@ -140,7 +201,7 @@ export function createAnnotationBase(
     id: createId("annotation"),
     paneId,
     type,
-    geometry,
+    geometry: clampGeometry(geometry),
     style: {
       stroke,
       strokeWidth: 3,

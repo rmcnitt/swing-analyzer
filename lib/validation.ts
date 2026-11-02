@@ -19,11 +19,6 @@ export const videoSchema = z.object({
   createdAt: z.string(),
 });
 
-const pointSchema = z.object({
-  x: z.number().min(0).max(1),
-  y: z.number().min(0).max(1),
-});
-
 const drawingStyleSchema = z.object({
   stroke: z.string(),
   fill: z.string().optional(),
@@ -31,41 +26,66 @@ const drawingStyleSchema = z.object({
   opacity: z.number().min(0).max(1),
 });
 
-export const annotationSchema = z.object({
+// Keep in sync with MAX_NORMALIZED_RADIUS in lib/analysis/annotations.ts (radius is normalized by
+// the frame's shorter side, so it can exceed 1 on portrait clips).
+const maxNormalizedRadius = 2;
+
+function createAnnotationSchema(unit: z.ZodNumber, radius: z.ZodNumber) {
+  const point = z.object({ x: unit, y: unit });
+
+  return z.object({
+    id: z.string(),
+    paneId: z.enum(["primary", "secondary"]),
+    type: z.enum(["line", "arrow", "rectangle", "circle", "angle", "freehand"]),
+    geometry: z.discriminatedUnion("kind", [
+      z.object({
+        kind: z.enum(["line", "arrow"]),
+        points: z.tuple([point, point]),
+      }),
+      z.object({
+        kind: z.literal("rectangle"),
+        origin: point,
+        size: z.object({ width: unit, height: unit }),
+      }),
+      z.object({
+        kind: z.literal("circle"),
+        center: point,
+        radius,
+      }),
+      z.object({
+        kind: z.literal("angle"),
+        points: z.tuple([point, point, point]),
+      }),
+      z.object({
+        kind: z.literal("freehand"),
+        points: z.array(point).min(2),
+      }),
+    ]),
+    style: drawingStyleSchema,
+    label: z.string().optional(),
+    frameBinding: z.number().optional(),
+    zIndex: z.number(),
+  });
+}
+
+/** Strict: normalized coordinates must lie inside the frame. */
+export const annotationSchema = createAnnotationSchema(
+  z.number().min(0).max(1),
+  z.number().min(0).max(maxNormalizedRadius),
+);
+
+/**
+ * Structure-only: any finite coordinates. Used when salvaging stored sessions so shapes saved
+ * slightly out of range (before creation-time clamping) can be clamped instead of discarded.
+ */
+export const looseAnnotationSchema = createAnnotationSchema(z.number(), z.number());
+
+export const markerSchema = z.object({
   id: z.string(),
   paneId: z.enum(["primary", "secondary"]),
-  type: z.enum(["line", "arrow", "rectangle", "circle", "angle", "freehand"]),
-  geometry: z.discriminatedUnion("kind", [
-    z.object({
-      kind: z.enum(["line", "arrow"]),
-      points: z.tuple([pointSchema, pointSchema]),
-    }),
-    z.object({
-      kind: z.literal("rectangle"),
-      origin: pointSchema,
-      size: z.object({
-        width: z.number().min(0).max(1),
-        height: z.number().min(0).max(1),
-      }),
-    }),
-    z.object({
-      kind: z.literal("circle"),
-      center: pointSchema,
-      radius: z.number().min(0).max(1),
-    }),
-    z.object({
-      kind: z.literal("angle"),
-      points: z.tuple([pointSchema, pointSchema, pointSchema]),
-    }),
-    z.object({
-      kind: z.literal("freehand"),
-      points: z.array(pointSchema).min(2),
-    }),
-  ]),
-  style: drawingStyleSchema,
-  label: z.string().optional(),
-  frameBinding: z.number().optional(),
-  zIndex: z.number(),
+  label: z.string(),
+  time: z.number().min(0),
+  notes: z.string().optional(),
 });
 
 export const sessionSchema = z.object({
@@ -94,14 +114,6 @@ export const sessionSchema = z.object({
     primary: z.array(annotationSchema),
     secondary: z.array(annotationSchema),
   }),
-  snapshotMarkers: z.array(
-    z.object({
-      id: z.string(),
-      paneId: z.enum(["primary", "secondary"]),
-      label: z.string(),
-      time: z.number().min(0),
-      notes: z.string().optional(),
-    }),
-  ),
+  snapshotMarkers: z.array(markerSchema),
   selectedProSwingId: z.string().optional(),
 });
