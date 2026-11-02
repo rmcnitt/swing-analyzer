@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { AnnotationCanvas } from "@/components/analysis/annotation-canvas";
 import { PositionBar } from "@/components/analysis/position-bar";
+import { ShapeLabelEditor } from "@/components/analysis/shape-label-editor";
 import { Timeline } from "@/components/analysis/timeline";
 import {
   DEFAULT_FPS,
@@ -62,6 +63,7 @@ interface VideoPaneProps {
   positions: ReadonlyMap<string, number>;
   activeTool: AnnotationTool;
   activeColor: HexColor;
+  strokeWidth: number;
   selectedAnnotationId?: string | null;
   isActive: boolean;
   /** Shared playback coordinator; the pane registers its video and routes transport through it. */
@@ -108,6 +110,7 @@ export function VideoPane({
   positions,
   activeTool,
   activeColor,
+  strokeWidth,
   selectedAnnotationId,
   isActive,
   syncGroup,
@@ -359,6 +362,7 @@ export function VideoPane({
 
     setIsRenaming(false);
   };
+  const selectedAnnotation = annotations.find((annotation) => annotation.id === selectedAnnotationId);
   const isZoomPanMode = activeTool === "zoom-pan";
   const golferBox = video?.golferBox;
   const fitted =
@@ -720,6 +724,7 @@ export function VideoPane({
                   paneId={pane.id}
                   tool={activeTool}
                   color={activeColor}
+                  strokeWidth={strokeWidth}
                   annotations={annotations}
                   visible={pane.overlayVisible}
                   selectedAnnotationId={selectedAnnotationId}
@@ -739,6 +744,23 @@ export function VideoPane({
                   />
                 ) : null}
               </div>
+
+              {selectedAnnotation && isActive && activeTool === "select" && pane.overlayVisible ? (
+                <ShapeLabelEditor
+                  key={selectedAnnotation.id}
+                  annotation={selectedAnnotation}
+                  onCommit={(label) =>
+                    onAnnotationsChange(
+                      pane.id,
+                      annotations.map((annotation) =>
+                        annotation.id === selectedAnnotation.id
+                          ? { ...annotation, label: label || undefined }
+                          : annotation,
+                      ),
+                    )
+                  }
+                />
+              ) : null}
             </div>
           ) : (
             <div className="flex h-full items-center justify-center px-6 text-center text-sm text-[color:var(--color-muted)]">

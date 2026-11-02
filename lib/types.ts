@@ -8,6 +8,8 @@ export type AnnotationTool =
   | "select"
   | "line"
   | "arrow"
+  /** A line through two points, drawn edge to edge (swing plane, shaft line). */
+  | "plane"
   | "rectangle"
   | "circle"
   | "angle"
@@ -74,7 +76,7 @@ export interface AnalysisPane {
 
 export type AnnotationGeometry =
   | {
-      kind: "line" | "arrow";
+      kind: "line" | "arrow" | "plane";
       points: [Point, Point];
     }
   | {

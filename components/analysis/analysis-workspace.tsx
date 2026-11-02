@@ -42,6 +42,7 @@ import type {
 } from "@/lib/types";
 import { createId, uniqueById } from "@/lib/utils";
 import { DEFAULT_FPS } from "@/lib/analysis/frames";
+import { DEFAULT_STROKE_WIDTH, STROKE_WIDTHS } from "@/lib/analysis/annotations";
 import {
   isSwingPosition,
   paneMarkers,
@@ -194,6 +195,10 @@ function WorkspaceView({
   const [activeColor, setActiveColor] = useState<HexColor>(
     () => loadUiPreference("active-color") ?? "#f97316",
   );
+  const [strokeWidth, setStrokeWidth] = useState(() => {
+    const saved = Number(loadUiPreference("stroke-width"));
+    return STROKE_WIDTHS.some((width) => width === saved) ? saved : DEFAULT_STROKE_WIDTH;
+  });
   const [selectedAnnotationByPane, setSelectedAnnotationByPane] = useState<
     Partial<Record<PaneId, string | null>>
   >({});
@@ -354,6 +359,22 @@ function WorkspaceView({
         [effectiveActivePaneId]: [],
       },
     }));
+  };
+
+  /** Restyles the selected shape (palette and width pickers act on it, like V1). */
+  const updateSelectedStyle = (style: Partial<AnnotationObject["style"]>) => {
+    if (!selectedAnnotationId) {
+      return;
+    }
+
+    updateAnnotations(
+      effectiveActivePaneId,
+      session.annotations[effectiveActivePaneId].map((annotation) =>
+        annotation.id === selectedAnnotationId
+          ? { ...annotation, style: { ...annotation.style, ...style } }
+          : annotation,
+      ),
+    );
   };
 
   const handleDeleteSelected = () => {
@@ -779,9 +800,16 @@ function WorkspaceView({
             overlayVisible={overlayVisible}
             hasSelectedAnnotation={Boolean(selectedAnnotationId)}
             onToolChange={handleToolChange}
+            strokeWidth={strokeWidth}
             onColorChange={(color) => {
               setActiveColor(color);
               saveUiPreference("active-color", color);
+              updateSelectedStyle({ stroke: color });
+            }}
+            onStrokeWidthChange={(width) => {
+              setStrokeWidth(width);
+              saveUiPreference("stroke-width", String(width));
+              updateSelectedStyle({ strokeWidth: width });
             }}
             onUndo={handleUndo}
             onRedo={handleRedo}
@@ -821,6 +849,7 @@ function WorkspaceView({
                 positions={positionsByPane[pane.id]}
                 activeTool={activeTool}
                 activeColor={activeColor}
+                strokeWidth={strokeWidth}
                 selectedAnnotationId={selectedAnnotationByPane[pane.id] ?? null}
                 isActive={effectiveActivePaneId === pane.id}
                 syncGroup={syncGroup}

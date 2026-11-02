@@ -6,6 +6,7 @@ import {
   EyeOff,
   Hand,
   MousePointer2,
+  MoveDiagonal,
   MoveUpRight,
   PenLine,
   RotateCcw,
@@ -15,6 +16,7 @@ import {
   Square,
   Trash2,
 } from "lucide-react";
+import { STROKE_WIDTHS } from "@/lib/analysis/annotations";
 import { TOOL_HOTKEYS } from "@/lib/analysis/shortcuts";
 import type { AnnotationTool, HexColor } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -28,6 +30,7 @@ const tools: Array<{
   { id: "zoom-pan", label: "Zoom / Pan", icon: Hand },
   { id: "line", label: "Line", icon: Slash },
   { id: "arrow", label: "Arrow", icon: MoveUpRight },
+  { id: "plane", label: "Plane line", icon: MoveDiagonal },
   { id: "rectangle", label: "Box", icon: Square },
   { id: "circle", label: "Circle", icon: Circle },
   { id: "angle", label: "Angle", icon: Ruler },
@@ -45,10 +48,12 @@ const palette: HexColor[] = [
 interface AnalysisToolbarProps {
   activeTool: AnnotationTool;
   activeColor: HexColor;
+  strokeWidth: number;
   overlayVisible: boolean;
   hasSelectedAnnotation: boolean;
   onToolChange: (tool: AnnotationTool) => void;
   onColorChange: (color: HexColor) => void;
+  onStrokeWidthChange: (width: number) => void;
   onUndo: () => void;
   onRedo: () => void;
   onClear: () => void;
@@ -59,10 +64,12 @@ interface AnalysisToolbarProps {
 export function AnalysisToolbar({
   activeTool,
   activeColor,
+  strokeWidth,
   overlayVisible,
   hasSelectedAnnotation,
   onToolChange,
   onColorChange,
+  onStrokeWidthChange,
   onUndo,
   onRedo,
   onClear,
@@ -111,8 +118,31 @@ export function AnalysisToolbar({
             )}
             style={{ backgroundColor: color }}
             aria-label={`Use ${color}`}
-            title={color}
+            title={hasSelectedAnnotation ? "Colour (applies to selected shape)" : color}
           />
+        ))}
+      </div>
+
+      <div className="my-2 h-px w-8 bg-white/10" />
+
+      <div className="flex flex-col items-center gap-1" role="group" aria-label="Line width">
+        {STROKE_WIDTHS.map((width) => (
+          <button
+            key={width}
+            type="button"
+            onClick={() => onStrokeWidthChange(width)}
+            aria-pressed={strokeWidth === width}
+            aria-label={`Line width ${width}`}
+            title={hasSelectedAnnotation ? `Width ${width} (applies to selected shape)` : `Line width ${width}`}
+            className={cn(
+              "flex h-6 w-9 items-center justify-center border",
+              strokeWidth === width
+                ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/14"
+                : "border-transparent hover:border-white/20 hover:bg-white/[0.06]",
+            )}
+          >
+            <span className="w-5 rounded-full bg-white/80" style={{ height: width }} />
+          </button>
         ))}
       </div>
 

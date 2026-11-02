@@ -49,10 +49,10 @@ function createAnnotationSchema(unit: z.ZodNumber, radius: z.ZodNumber) {
   return z.object({
     id: z.string(),
     paneId: z.enum(["primary", "secondary"]),
-    type: z.enum(["line", "arrow", "rectangle", "circle", "angle", "freehand"]),
+    type: z.enum(["line", "arrow", "plane", "rectangle", "circle", "angle", "freehand"]),
     geometry: z.discriminatedUnion("kind", [
       z.object({
-        kind: z.enum(["line", "arrow"]),
+        kind: z.enum(["line", "arrow", "plane"]),
         points: z.tuple([point, point]),
       }),
       z.object({

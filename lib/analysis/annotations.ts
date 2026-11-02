@@ -32,6 +32,7 @@ export function geometryToAbsolute(
   switch (geometry.kind) {
     case "line":
     case "arrow":
+    case "plane":
       return {
         kind: geometry.kind,
         points: [
@@ -78,6 +79,7 @@ export function geometryToNormalized(
   switch (geometry.kind) {
     case "line":
     case "arrow":
+    case "plane":
       return {
         kind: geometry.kind,
         points: [
@@ -141,6 +143,7 @@ export function clampGeometry(geometry: AnnotationGeometry): AnnotationGeometry 
   switch (geometry.kind) {
     case "line":
     case "arrow":
+    case "plane":
       return {
         kind: geometry.kind,
         points: [clampPoint(geometry.points[0]), clampPoint(geometry.points[1])],
@@ -217,6 +220,7 @@ export function isDegenerateShape(geometry: AnnotationGeometry, minExtent = MIN_
   switch (geometry.kind) {
     case "line":
     case "arrow":
+    case "plane":
       return distance(geometry.points[0], geometry.points[1]) < minExtent;
     case "rectangle":
       return geometry.size.width < minExtent || geometry.size.height < minExtent;
@@ -251,12 +255,16 @@ function zodParseArray(value: unknown) {
   return annotationSchema.array().parse(value);
 }
 
+export const STROKE_WIDTHS = [2, 3, 5] as const;
+export const DEFAULT_STROKE_WIDTH = 3;
+
 export function createAnnotationBase(
   type: AnnotationObject["type"],
   paneId: AnnotationObject["paneId"],
   geometry: AnnotationGeometry,
   stroke: AnnotationObject["style"]["stroke"],
   zIndex: number,
+  strokeWidth = DEFAULT_STROKE_WIDTH,
 ): AnnotationObject {
   return {
     id: createId("annotation"),
@@ -265,7 +273,7 @@ export function createAnnotationBase(
     geometry: clampGeometry(geometry),
     style: {
       stroke,
-      strokeWidth: 3,
+      strokeWidth,
       opacity: 1,
     },
     zIndex,
