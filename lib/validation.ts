@@ -17,6 +17,7 @@ export const videoSchema = z.object({
   duration: z.number(),
   fps: z.number().positive().optional(),
   fpsSource: z.enum(["detected", "manual"]).optional(),
+  mimeType: z.string().optional(),
   orientation: z.enum(["face-on", "down-the-line"]),
   clubTag: z.string(),
   uploadStatus: z.enum(["ready", "processing"]),

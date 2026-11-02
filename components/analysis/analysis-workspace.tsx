@@ -12,6 +12,7 @@ import {
   Save,
 } from "lucide-react";
 import { AnalysisToolbar } from "@/components/analysis/analysis-toolbar";
+import { PlaybackProblemNotice } from "@/components/analysis/playback-problem-notice";
 import { SessionSidebar } from "@/components/analysis/session-sidebar";
 import { VideoPane } from "@/components/analysis/video-pane";
 import {
@@ -38,6 +39,7 @@ import type {
 import { createId, uniqueById } from "@/lib/utils";
 import { DEFAULT_FPS } from "@/lib/analysis/frames";
 import { SyncGroup } from "@/lib/analysis/sync-group";
+import type { PlaybackProblem } from "@/lib/video/playback-errors";
 import { createVideoThumbnail, detectVideoFps, readVideoMetadata, type VideoFileMetadata } from "@/lib/video/media";
 
 interface AnalysisWorkspaceProps {
@@ -187,6 +189,11 @@ function WorkspaceView({
   const [syncGroup] = useState(() => new SyncGroup());
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [uploadProblem, setUploadProblem] = useState<{
+    problem: PlaybackProblem;
+    fileName: string;
+    mimeType: string;
+  } | null>(null);
   const compareMode = searchParams.get("compare") === "true";
   const effectiveActivePaneId = compareMode ? activePaneId : "primary";
 
@@ -342,6 +349,14 @@ function WorkspaceView({
     // Temporary URL just for probing; the playable URL comes from IndexedDB via useStoredVideos.
     const probeUrl = URL.createObjectURL(file);
     const metadata = await readVideoMetadata(probeUrl);
+
+    if (metadata.problem) {
+      URL.revokeObjectURL(probeUrl);
+      setUploadProblem({ problem: metadata.problem, fileName: file.name, mimeType: file.type });
+      return;
+    }
+
+    setUploadProblem(null);
     const thumbnail = await createVideoThumbnail(probeUrl);
     const detectedFps = await detectVideoFps(probeUrl);
     URL.revokeObjectURL(probeUrl);
@@ -359,6 +374,7 @@ function WorkspaceView({
       height: metadata.height,
       orientation: "face-on",
       clubTag: "Uploaded Clip",
+      mimeType: file.type || undefined,
       uploadStatus: "ready",
       createdAt: new Date().toISOString(),
     };
@@ -583,6 +599,16 @@ function WorkspaceView({
           </button>
         </div>
       </header>
+
+      {uploadProblem ? (
+        <PlaybackProblemNotice
+          className="mx-1.5 mt-1.5"
+          problem={uploadProblem.problem}
+          fileName={uploadProblem.fileName}
+          mimeType={uploadProblem.mimeType}
+          onDismiss={() => setUploadProblem(null)}
+        />
+      ) : null}
 
       <div className="flex min-h-0 flex-1">
         <div className="w-[52px] shrink-0">

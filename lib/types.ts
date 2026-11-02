@@ -43,6 +43,8 @@ export interface VideoAsset {
   fps?: number;
   /** How `fps` was set. Undefined means a default/legacy value worth re-detecting. */
   fpsSource?: "detected" | "manual";
+  /** Original file's MIME type, kept for playback troubleshooting. */
+  mimeType?: string;
   orientation: SwingOrientation;
   clubTag: string;
   uploadStatus: UploadStatus;

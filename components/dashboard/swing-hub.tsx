@@ -26,6 +26,7 @@ import {
 import { useLocalLibrary } from "@/lib/storage/use-stored-videos";
 import type { AnalysisSession, SwingOrientation, VideoAsset } from "@/lib/types";
 import { createId, formatDate, formatDuration } from "@/lib/utils";
+import { PlaybackProblemNotice } from "@/components/analysis/playback-problem-notice";
 import { DEFAULT_FPS, frameRateChoices } from "@/lib/analysis/frames";
 import { createVideoThumbnail, detectVideoFps, readVideoMetadata, type VideoFileMetadata } from "@/lib/video/media";
 
@@ -139,7 +140,7 @@ export function SwingHub() {
   };
 
   const handleCreateSession = async () => {
-    if (!selectedFile || !previewUrl || !metadata || isImporting) {
+    if (!selectedFile || !previewUrl || !metadata || metadata.problem || isImporting) {
       return;
     }
 
@@ -164,6 +165,7 @@ export function SwingHub() {
       height: metadata.height,
       orientation,
       clubTag: club,
+      mimeType: selectedFile.type || undefined,
       uploadStatus: "ready",
       createdAt: now,
     };
@@ -310,6 +312,15 @@ export function SwingHub() {
               </button>
             </div>
 
+            {metadata?.problem ? (
+              <PlaybackProblemNotice
+                className="mt-3"
+                problem={metadata.problem}
+                fileName={selectedFile.name}
+                mimeType={selectedFile.type}
+              />
+            ) : null}
+
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               <label className="block">
                 <span className="text-xs text-[color:var(--color-muted)]">
@@ -413,7 +424,7 @@ export function SwingHub() {
               <button
                 type="button"
                 onClick={handleCreateSession}
-                disabled={isImporting}
+                disabled={isImporting || Boolean(metadata?.problem)}
                 className="inline-flex h-9 items-center gap-2 bg-[color:var(--color-accent)] px-3 text-sm font-semibold text-[color:var(--color-ink)] disabled:opacity-60"
               >
                 <Play className="size-4" />

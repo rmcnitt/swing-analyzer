@@ -1,11 +1,14 @@
 "use client";
 
 import { estimateFpsFromMediaTimes } from "@/lib/analysis/frames";
+import { classifyMediaError, type PlaybackProblem } from "@/lib/video/playback-errors";
 
 export interface VideoFileMetadata {
   duration: number;
   width: number;
   height: number;
+  /** Set when this browser can't play the file (no picture, or a media error). */
+  problem?: PlaybackProblem;
 }
 
 /** Reads duration and intrinsic dimensions from a video URL (object URL or same-origin path). */
@@ -21,12 +24,14 @@ export function readVideoMetadata(url: string) {
         duration: element.duration || 0,
         width: element.videoWidth || 0,
         height: element.videoHeight || 0,
+        // Unsupported video codecs (e.g. HEVC in Chrome) can still expose an audio-only track.
+        problem: element.videoWidth ? undefined : "unsupported",
       });
       element.src = "";
     };
 
     element.onerror = () => {
-      resolve({ duration: 0, width: 0, height: 0 });
+      resolve({ duration: 0, width: 0, height: 0, problem: classifyMediaError(element.error?.code) });
       element.src = "";
     };
   });

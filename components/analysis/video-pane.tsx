@@ -31,7 +31,9 @@ import {
 } from "@/lib/analysis/frames";
 import type { SyncGroup, SyncMedia } from "@/lib/analysis/sync-group";
 import { detectVideoFps } from "@/lib/video/media";
+import { classifyMediaError, type PlaybackProblem } from "@/lib/video/playback-errors";
 import { createTimeStore, type TimeStore } from "@/lib/video/time-store";
+import { PlaybackProblemNotice } from "@/components/analysis/playback-problem-notice";
 import { getContainedStageSize, getVideoAspectRatio } from "@/lib/video-layout";
 import type {
   AnalysisPane,
@@ -152,6 +154,17 @@ export function VideoPane({
     },
   }));
   const [isPlaying, setIsPlaying] = useState(false);
+  // Keyed by URL so switching clips clears it without an effect.
+  const [mediaError, setMediaError] = useState<{ url: string; problem: PlaybackProblem } | null>(
+    null,
+  );
+  const playbackProblem: PlaybackProblem | null = !video
+    ? null
+    : !video.url || video.url.startsWith("indexeddb")
+      ? "missing"
+      : mediaError?.url === video.url
+        ? mediaError.problem
+        : null;
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isRenaming, setIsRenaming] = useState(false);
@@ -588,7 +601,16 @@ export function VideoPane({
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
         >
-          {video ? (
+          {video && playbackProblem ? (
+            <div className="flex h-full items-center justify-center p-4">
+              <PlaybackProblemNotice
+                className="max-w-md"
+                problem={playbackProblem}
+                fileName={video.title}
+                mimeType={video.mimeType}
+              />
+            </div>
+          ) : video ? (
             <div className="absolute inset-0 flex items-center justify-center">
               <div
                 // Video and Konva overlay are transformed together so normalized annotations stay
@@ -613,6 +635,12 @@ export function VideoPane({
 
                     setDuration(nextDuration);
 
+                    // Audio-only decode: the browser lacks the video codec (common for HEVC).
+                    if (element && !element.videoWidth) {
+                      setMediaError({ url: video.url, problem: "unsupported" });
+                      return;
+                    }
+
                     if (element) {
                       // Loading a source resets the rate; restore it and the saved position.
                       element.defaultPlaybackRate = baseRateRef.current;
@@ -634,6 +662,12 @@ export function VideoPane({
                     }
                   }}
                   onSeeked={syncTimeFromElement}
+                  onError={() =>
+                    setMediaError({
+                      url: video.url,
+                      problem: classifyMediaError(videoRef.current?.error?.code),
+                    })
+                  }
                   onPlay={() => setIsPlaying(true)}
                   onPause={() => {
                     setIsPlaying(false);
