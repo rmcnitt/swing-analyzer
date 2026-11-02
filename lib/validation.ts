@@ -88,6 +88,7 @@ export const looseAnnotationSchema = createAnnotationSchema(z.number(), z.number
 export const markerSchema = z.object({
   id: z.string(),
   paneId: z.enum(["primary", "secondary"]),
+  videoId: z.string().optional(),
   label: z.string(),
   time: z.number().min(0),
   notes: z.string().optional(),

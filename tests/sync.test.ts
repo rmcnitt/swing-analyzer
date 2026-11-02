@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { followerCorrection } from "@/lib/analysis/sync";
+import {
+  createCheckpointMapper,
+  followerCorrection,
+  mapThroughAnchors,
+  matchCheckpoints,
+} from "@/lib/analysis/sync";
 import { SyncGroup, type SyncMedia } from "@/lib/analysis/sync-group";
 import { createTimeStore } from "@/lib/video/time-store";
 
 class FakeMedia implements SyncMedia {
   currentTime = 0;
+  duration = 10;
   paused = true;
   ended = false;
   multiplier = 1;
@@ -25,7 +31,10 @@ class FakeMedia implements SyncMedia {
 }
 
 function setup(enabled = true, offset = 0) {
-  const group = new SyncGroup((from, to, time) => (to === "secondary" ? time + offset : time - offset));
+  const group = new SyncGroup((from, to, time) => ({
+    time: to === "secondary" ? time + offset : time - offset,
+    rate: 1,
+  }));
   const primary = new FakeMedia();
   const secondary = new FakeMedia();
   group.register("primary", primary);
@@ -53,6 +62,85 @@ describe("followerCorrection", () => {
 
   it("seeks when drift is large", () => {
     expect(followerCorrection(2.0, 1.0)).toEqual({ kind: "seek", time: 2.0 });
+  });
+});
+
+describe("mapThroughAnchors", () => {
+  it("is the identity with no checkpoints", () => {
+    expect(mapThroughAnchors([], 1.3)).toEqual({ time: 1.3, rate: 1 });
+  });
+
+  it("falls back to a constant offset with one checkpoint", () => {
+    expect(mapThroughAnchors([[2, 1.5]], 3)).toEqual({ time: 2.5, rate: 1 });
+    expect(mapThroughAnchors([[2, 1.5]], 0.5)).toEqual({ time: 0, rate: 1 });
+  });
+
+  it("stretches time between checkpoints so differing tempos stay aligned", () => {
+    // Leader backswing (Address→Top) takes 1.0s; follower's takes 0.8s.
+    const anchors = [
+      [1, 2],
+      [2, 2.8],
+      [2.3, 3.05],
+    ] as const;
+
+    expect(mapThroughAnchors(anchors, 1)).toEqual({ time: 2, rate: 1 });
+    expect(mapThroughAnchors(anchors, 2).time).toBeCloseTo(2.8);
+    expect(mapThroughAnchors(anchors, 1.5).time).toBeCloseTo(2.4);
+    expect(mapThroughAnchors(anchors, 1.5).rate).toBeCloseTo(0.8);
+    expect(mapThroughAnchors(anchors, 2.15).time).toBeCloseTo(2.925);
+    expect(mapThroughAnchors(anchors, 2.15).rate).toBeCloseTo(0.25 / 0.3);
+  });
+
+  it("uses the nearest checkpoint's offset outside the marked range", () => {
+    const anchors = [
+      [1, 2],
+      [2, 2.8],
+    ] as const;
+
+    expect(mapThroughAnchors(anchors, 0.5)).toEqual({ time: 1.5, rate: 1 });
+    expect(mapThroughAnchors(anchors, 3).time).toBeCloseTo(3.8);
+    expect(mapThroughAnchors(anchors, 3).rate).toBe(1);
+  });
+
+  it("caps extreme tempo ratios", () => {
+    expect(mapThroughAnchors([[0, 0], [1, 10]], 0.5).rate).toBe(4);
+  });
+});
+
+describe("matchCheckpoints", () => {
+  const times = (entries: Record<string, number>) => new Map(Object.entries(entries));
+
+  it("pairs only positions marked in both panes, in time order", () => {
+    expect(
+      matchCheckpoints(times({ top: 2, address: 1, finish: 4 }), times({ address: 0.5, top: 1.4 })),
+    ).toEqual([
+      { key: "address", primary: 1, secondary: 0.5 },
+      { key: "top", primary: 2, secondary: 1.4 },
+    ]);
+  });
+
+  it("drops a checkpoint that would run time backwards", () => {
+    const matched = matchCheckpoints(
+      times({ address: 1, top: 2, impact: 2.3, finish: 3 }),
+      // Top mis-marked after finish in the follower.
+      times({ address: 0.5, top: 2.6, impact: 1.6, finish: 2.5 }),
+    );
+
+    expect(matched.map((checkpoint) => checkpoint.key)).toEqual(["address", "impact", "finish"]);
+  });
+});
+
+describe("createCheckpointMapper", () => {
+  it("maps both directions through the same checkpoints", () => {
+    const mapper = createCheckpointMapper([
+      { key: "address", primary: 1, secondary: 2 },
+      { key: "top", primary: 2, secondary: 2.8 },
+    ]);
+
+    expect(mapper("primary", "secondary", 1.5).time).toBeCloseTo(2.4);
+    expect(mapper("secondary", "primary", 2.4).time).toBeCloseTo(1.5);
+    expect(mapper("secondary", "primary", 2.4).rate).toBeCloseTo(1.25);
+    expect(mapper("primary", "primary", 1.5)).toEqual({ time: 1.5, rate: 1 });
   });
 });
 
@@ -113,6 +201,65 @@ describe("SyncGroup", () => {
     group.onEnded("primary");
 
     expect(secondary.paused).toBe(true);
+  });
+
+  it("clamps followers to their clip edges", () => {
+    const { group, secondary } = setup(true, -1);
+
+    group.seek("primary", 0.4);
+    expect(secondary.currentTime).toBe(0);
+
+    group.seek("primary", 20);
+    expect(secondary.currentTime).toBe(10);
+  });
+
+  it("holds a follower at its start until the leader reaches its first frame", () => {
+    const { group, primary, secondary } = setup(true, -1);
+    primary.currentTime = 0.5;
+
+    group.play("primary");
+    expect(secondary.paused).toBe(true);
+    expect(secondary.currentTime).toBe(0);
+
+    group.onFrame("primary", 0.8);
+    expect(secondary.paused).toBe(true);
+
+    group.onFrame("primary", 1.2);
+    expect(secondary.paused).toBe(false);
+    expect(secondary.currentTime).toBeCloseTo(0.2);
+  });
+
+  it("stops a follower at its end while the leader plays on", () => {
+    const { group, secondary } = setup(true, 1);
+
+    group.play("primary");
+    secondary.currentTime = 9.5;
+    group.onFrame("primary", 9.6);
+
+    expect(secondary.paused).toBe(true);
+    expect(secondary.currentTime).toBe(10);
+  });
+
+  it("runs the follower at the local tempo ratio", () => {
+    const group = new SyncGroup(
+      createCheckpointMapper([
+        { key: "address", primary: 1, secondary: 1 },
+        { key: "top", primary: 2, secondary: 1.8 },
+      ]),
+    );
+    const primary = new FakeMedia();
+    const secondary = new FakeMedia();
+    group.register("primary", primary);
+    group.register("secondary", secondary);
+    group.setEnabled(true);
+
+    primary.currentTime = 1.5;
+    group.play("primary");
+    expect(secondary.currentTime).toBeCloseTo(1.4);
+    expect(secondary.multiplier).toBeCloseTo(0.8);
+
+    group.onFrame("primary", 1.5);
+    expect(secondary.multiplier).toBeCloseTo(0.8);
   });
 
   it("resets nudged rates when sync is turned off", () => {

@@ -101,6 +101,8 @@ export interface AnnotationObject {
 export interface SnapshotMarker {
   id: string;
   paneId: PaneId;
+  /** Clip the marker was placed on; it only applies while that clip is in the pane. */
+  videoId?: string;
   label: string;
   time: number;
   notes?: string;

@@ -21,6 +21,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { AnnotationCanvas } from "@/components/analysis/annotation-canvas";
+import { PositionBar } from "@/components/analysis/position-bar";
 import { Timeline } from "@/components/analysis/timeline";
 import {
   DEFAULT_FPS,
@@ -52,6 +53,8 @@ interface VideoPaneProps {
   videos: VideoAsset[];
   annotations: AnnotationObject[];
   markers: SnapshotMarker[];
+  /** Marked time per swing position (by position key) for this pane's clip. */
+  positions: ReadonlyMap<string, number>;
   activeTool: AnnotationTool;
   activeColor: HexColor;
   selectedAnnotationId?: string | null;
@@ -77,9 +80,19 @@ interface VideoPaneProps {
   onChangeRate: (paneId: PaneId, rate: number) => void;
   onSelectionChange: (paneId: PaneId, annotationId: string | null) => void;
   onAnnotationsChange: (paneId: PaneId, annotations: AnnotationObject[]) => void;
+  onJumpToPosition: (paneId: PaneId, label: string) => void;
+  onMarkPosition: (paneId: PaneId, label: string, time: number) => void;
 }
 
 const speedOptions = [0.1, 0.25, 0.5, 0.75, 1];
+
+// Browsers reject playback rates outside roughly this range (Chrome throws below 1/16).
+const MIN_ELEMENT_RATE = 0.0625;
+const MAX_ELEMENT_RATE = 16;
+
+function applyPlaybackRate(element: HTMLVideoElement, baseRate: number, multiplier: number) {
+  element.playbackRate = clamp(baseRate * multiplier, MIN_ELEMENT_RATE, MAX_ELEMENT_RATE);
+}
 
 export function VideoPane({
   pane,
@@ -87,6 +100,7 @@ export function VideoPane({
   videos,
   annotations,
   markers,
+  positions,
   activeTool,
   activeColor,
   selectedAnnotationId,
@@ -104,6 +118,8 @@ export function VideoPane({
   onChangeRate,
   onSelectionChange,
   onAnnotationsChange,
+  onJumpToPosition,
+  onMarkPosition,
 }: VideoPaneProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaViewportRef = useRef<HTMLDivElement | null>(null);
@@ -121,6 +137,10 @@ export function VideoPane({
   const [media] = useState<SyncMedia>(() => ({
     get currentTime() {
       return videoRef.current?.currentTime ?? 0;
+    },
+    get duration() {
+      const duration = videoRef.current?.duration;
+      return duration && Number.isFinite(duration) ? duration : Infinity;
     },
     get paused() {
       return videoRef.current?.paused ?? true;
@@ -149,7 +169,7 @@ export function VideoPane({
       rateMultiplierRef.current = multiplier;
 
       if (element) {
-        element.playbackRate = baseRateRef.current * multiplier;
+        applyPlaybackRate(element, baseRateRef.current, multiplier);
       }
     },
   }));
@@ -204,7 +224,7 @@ export function VideoPane({
 
     if (element) {
       element.defaultPlaybackRate = pane.playbackRate;
-      element.playbackRate = pane.playbackRate * rateMultiplierRef.current;
+      applyPlaybackRate(element, pane.playbackRate, rateMultiplierRef.current);
     }
   }, [pane.playbackRate]);
 
@@ -644,7 +664,7 @@ export function VideoPane({
                     if (element) {
                       // Loading a source resets the rate; restore it and the saved position.
                       element.defaultPlaybackRate = baseRateRef.current;
-                      element.playbackRate = baseRateRef.current * rateMultiplierRef.current;
+                      applyPlaybackRate(element, baseRateRef.current, rateMultiplierRef.current);
 
                       if (pane.currentTime > 0 && pane.currentTime < nextDuration) {
                         element.currentTime = pane.currentTime;
@@ -766,6 +786,18 @@ export function VideoPane({
               ))}
             </select>
           </div>
+
+          {video && !playbackProblem ? (
+            <PositionBar
+              timeStore={timeStore}
+              fps={video.fps}
+              positions={positions}
+              onJump={(label) => onJumpToPosition(pane.id, label)}
+              onMark={(label) =>
+                onMarkPosition(pane.id, label, videoRef.current?.currentTime ?? timeStore.get())
+              }
+            />
+          ) : null}
         </div>
       </div>
     </section>

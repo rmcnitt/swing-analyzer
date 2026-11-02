@@ -42,11 +42,13 @@ export const sampleVideos: VideoAsset[] = [
 function positionMarkers(
   sessionKey: string,
   paneId: PaneId,
+  videoId: string,
   times: Record<"Address" | "Takeaway" | "Top" | "Impact" | "Finish", number>,
 ): SnapshotMarker[] {
   return Object.entries(times).map(([label, time]) => ({
     id: `${sessionKey}-marker-${label.toLowerCase()}`,
     paneId,
+    videoId,
     label,
     time,
   }));
@@ -98,7 +100,7 @@ export const sampleSessions: AnalysisSession[] = [
       ],
       secondary: [],
     },
-    snapshotMarkers: positionMarkers("sample-session", "primary", {
+    snapshotMarkers: positionMarkers("sample-session", "primary", "sample-video-face-on", {
       Address: 1.5,
       Takeaway: 1.85,
       Top: 2.48,
@@ -117,7 +119,7 @@ export const sampleSessions: AnalysisSession[] = [
     lastOpenedAt: "2026-11-02T11:00:00.000Z",
     panes: samplePanes("sample-video-down-the-line"),
     annotations: { primary: [], secondary: [] },
-    snapshotMarkers: positionMarkers("sample-session-dtl", "primary", {
+    snapshotMarkers: positionMarkers("sample-session-dtl", "primary", "sample-video-down-the-line", {
       Address: 1.0,
       Takeaway: 1.35,
       Top: 1.82,

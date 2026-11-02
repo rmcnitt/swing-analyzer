@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { startTransition } from "react";
 import {
   Columns2,
@@ -12,6 +12,7 @@ import {
   Save,
 } from "lucide-react";
 import { AnalysisToolbar } from "@/components/analysis/analysis-toolbar";
+import { ComparePositionBar } from "@/components/analysis/compare-position-bar";
 import { PlaybackProblemNotice } from "@/components/analysis/playback-problem-notice";
 import { SessionSidebar } from "@/components/analysis/session-sidebar";
 import { VideoPane } from "@/components/analysis/video-pane";
@@ -38,6 +39,14 @@ import type {
 } from "@/lib/types";
 import { createId, uniqueById } from "@/lib/utils";
 import { DEFAULT_FPS } from "@/lib/analysis/frames";
+import {
+  isSwingPosition,
+  paneMarkers,
+  positionKey,
+  positionTimes,
+  upsertPositionMarker,
+} from "@/lib/analysis/positions";
+import { createCheckpointMapper, matchCheckpoints } from "@/lib/analysis/sync";
 import { SyncGroup } from "@/lib/analysis/sync-group";
 import type { PlaybackProblem } from "@/lib/video/playback-errors";
 import { createVideoThumbnail, detectVideoFps, readVideoMetadata, type VideoFileMetadata } from "@/lib/video/media";
@@ -213,6 +222,34 @@ function WorkspaceView({
     syncGroup.setEnabled(session.syncEnabled);
   }, [syncGroup, session.syncEnabled]);
 
+  // Positions marked on each pane's current clip; shared ones drive the compare time mapping.
+  const { markersByPane, positionsByPane, checkpoints } = useMemo(() => {
+    const byPane = {
+      primary: paneMarkers(session.snapshotMarkers, {
+        id: "primary",
+        videoId: session.panes.find((pane) => pane.id === "primary")?.videoId,
+      }),
+      secondary: paneMarkers(session.snapshotMarkers, {
+        id: "secondary",
+        videoId: session.panes.find((pane) => pane.id === "secondary")?.videoId,
+      }),
+    } satisfies Record<PaneId, SnapshotMarker[]>;
+    const positions = {
+      primary: positionTimes(byPane.primary),
+      secondary: positionTimes(byPane.secondary),
+    } satisfies Record<PaneId, Map<string, number>>;
+
+    return {
+      markersByPane: byPane,
+      positionsByPane: positions,
+      checkpoints: matchCheckpoints(positions.primary, positions.secondary),
+    };
+  }, [session.snapshotMarkers, session.panes]);
+
+  useEffect(() => {
+    syncGroup.setTimeMapper(createCheckpointMapper(checkpoints));
+  }, [syncGroup, checkpoints]);
+
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       void saveStoredSession(session);
@@ -385,25 +422,67 @@ function WorkspaceView({
     handleSelectVideo(paneId, asset.id);
   };
 
+  const addMarker = (paneId: PaneId, label: string, time: number) => {
+    setSession((current) => {
+      const marker: SnapshotMarker = {
+        id: createId("marker"),
+        paneId,
+        videoId: current.panes.find((pane) => pane.id === paneId)?.videoId,
+        label,
+        time: Number(time.toFixed(4)),
+      };
+
+      return {
+        ...current,
+        // A swing position has one time per clip; other labels can repeat.
+        snapshotMarkers: isSwingPosition(label)
+          ? upsertPositionMarker(current.snapshotMarkers, marker)
+          : [...current.snapshotMarkers, marker],
+      };
+    });
+  };
+
   const handleAddMarker = (label?: string) => {
     const activeTime =
       syncGroup.get(effectiveActivePaneId)?.currentTime ?? activePane?.currentTime ?? 0;
 
-    setSession((current) => ({
-      ...current,
-      snapshotMarkers: [
-        ...current.snapshotMarkers,
-        {
-          id: createId("marker"),
-          paneId: effectiveActivePaneId,
-          label: label?.trim() || `Checkpoint ${current.snapshotMarkers.length + 1}`,
-          time: Number(activeTime.toFixed(4)),
-        },
-      ],
-    }));
+    addMarker(
+      effectiveActivePaneId,
+      label?.trim() || `Checkpoint ${session.snapshotMarkers.length + 1}`,
+      activeTime,
+    );
   };
 
-  const handleSeekMarker = (marker: SnapshotMarker) => {
+  const findPositionMarker = (paneId: PaneId, label: string) => {
+    const time = positionsByPane[paneId].get(positionKey(label));
+    return time === undefined ? undefined : { paneId, time };
+  };
+
+  const handleJumpToPosition = (paneId: PaneId, label: string) => {
+    const target = findPositionMarker(paneId, label);
+
+    if (target) {
+      handleSeekMarker(target);
+    }
+  };
+
+  /** Puts each pane on its own marked frame for this position, so they show the same moment. */
+  const handleJumpBoth = (label: string) => {
+    const targets = (["primary", "secondary"] as const)
+      .map((paneId) => findPositionMarker(paneId, label))
+      .filter((target) => target !== undefined);
+
+    if (targets.length === 1) {
+      // Only one swing has it: jump there and let sync map the other pane.
+      handleSeekMarker(targets[0]);
+      return;
+    }
+
+    syncGroup.pauseAll();
+    targets.forEach(({ paneId, time }) => syncGroup.get(paneId)?.seek(time));
+  };
+
+  const handleSeekMarker = (marker: Pick<SnapshotMarker, "paneId" | "time">) => {
     setActivePaneId(marker.paneId);
 
     // Jumping to a position means studying it: stop there (and align the other pane if synced).
@@ -444,6 +523,10 @@ function WorkspaceView({
     if (!compareMode) {
       handleSetCompareMode(true);
     }
+  };
+
+  const handleToggleSync = () => {
+    setSession((current) => ({ ...current, syncEnabled: !current.syncEnabled }));
   };
 
   const handleManualSave = () => {
@@ -552,24 +635,6 @@ function WorkspaceView({
             <Columns2 className="size-3.5" />
             <span className="hidden sm:inline">{compareMode ? "Comparing" : "Compare"}</span>
           </button>
-          {compareMode ? (
-            <button
-              type="button"
-              onClick={() =>
-                setSession((current) => ({
-                  ...current,
-                  syncEnabled: !current.syncEnabled,
-                }))
-              }
-              className={`hidden h-8 border px-2.5 text-xs sm:block ${
-                session.syncEnabled
-                  ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/14 text-white"
-                  : "border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:border-white/20 hover:text-white"
-              }`}
-            >
-              {session.syncEnabled ? "Sync on" : "Sync off"}
-            </button>
-          ) : null}
           <Link
             href="/library"
             className="flex h-8 items-center gap-2 border border-[color:var(--color-border)] px-2.5 text-xs text-[color:var(--color-muted)] hover:border-white/20 hover:text-white"
@@ -633,9 +698,18 @@ function WorkspaceView({
           />
         </div>
 
-        <main className="min-w-0 flex-1 p-1.5">
+        <main className="flex min-w-0 flex-1 flex-col p-1.5">
+          {compareMode ? (
+            <ComparePositionBar
+              syncEnabled={session.syncEnabled}
+              positionsByPane={positionsByPane}
+              checkpoints={checkpoints}
+              onJumpBoth={handleJumpBoth}
+              onToggleSync={handleToggleSync}
+            />
+          ) : null}
           <div
-            className={`grid h-full min-h-0 ${
+            className={`grid min-h-0 flex-1 ${
               compareMode ? "gap-0 xl:grid-cols-2" : "grid-cols-1"
             }`}
           >
@@ -646,7 +720,8 @@ function WorkspaceView({
                 video={getVideo(pane.videoId)}
                 videos={allVideos}
                 annotations={session.annotations[pane.id]}
-                markers={session.snapshotMarkers.filter((marker) => marker.paneId === pane.id)}
+                markers={markersByPane[pane.id]}
+                positions={positionsByPane[pane.id]}
                 activeTool={activeTool}
                 activeColor={activeColor}
                 selectedAnnotationId={selectedAnnotationByPane[pane.id] ?? null}
@@ -670,6 +745,8 @@ function WorkspaceView({
                   }));
                 }}
                 onAnnotationsChange={updateAnnotations}
+                onJumpToPosition={handleJumpToPosition}
+                onMarkPosition={addMarker}
               />
             ))}
           </div>
@@ -682,7 +759,7 @@ function WorkspaceView({
               notes={session.notes}
               syncEnabled={session.syncEnabled}
               activePaneId={effectiveActivePaneId}
-              markers={session.snapshotMarkers}
+              markers={[...markersByPane.primary, ...(compareMode ? markersByPane.secondary : [])]}
               references={references}
               lastSavedAt={lastSavedAt}
               onNotesChange={(value) =>
@@ -691,12 +768,7 @@ function WorkspaceView({
                   notes: value,
                 }))
               }
-              onToggleSync={() =>
-                setSession((current) => ({
-                  ...current,
-                  syncEnabled: !current.syncEnabled,
-                }))
-              }
+              onToggleSync={handleToggleSync}
               onSave={handleManualSave}
               onAddMarker={handleAddMarker}
               onSeekMarker={handleSeekMarker}
