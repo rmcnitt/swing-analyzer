@@ -46,3 +46,6 @@ next-env.d.ts
 
 # third-party reference screenshots (kept locally for design reference only)
 /DesignIdeas/*.png
+
+# generated from local public/pro-swings media (temporary until Phase 1 references)
+/lib/data/pro-swings.generated.ts
