@@ -33,6 +33,19 @@ export function createId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+export function uniqueById<T extends { id: string }>(items: T[]) {
+  const seen = new Set<string>();
+
+  return items.filter((item) => {
+    if (seen.has(item.id)) {
+      return false;
+    }
+
+    seen.add(item.id);
+    return true;
+  });
+}
+
 export function getVideoLabel(value?: string) {
   return value ? value : "Choose a swing video";
 }

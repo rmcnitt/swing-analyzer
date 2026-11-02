@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { AnalysisWorkspace } from "@/components/analysis/analysis-workspace";
-import { getAllVideos, getProSwings, getSessionById } from "@/lib/data/repository";
+import { proSwingReferences } from "@/lib/data/pro-swings";
+import { getSampleSession, sampleVideos } from "@/lib/data/seed";
 import type { AnalysisSession } from "@/lib/types";
 
 interface AnalysisPageProps {
@@ -11,24 +12,18 @@ interface AnalysisPageProps {
 
 export default async function AnalysisPage({ params }: AnalysisPageProps) {
   const { sessionId } = await params;
-  const [session, videos, proSwings] = await Promise.all([
-    getSessionById(sessionId),
-    getAllVideos(),
-    getProSwings(),
-  ]);
+  const session = getSampleSession(sessionId);
 
-  if (!session) {
-    if (!sessionId.startsWith("local-")) {
-      notFound();
-    }
+  if (!session && !sessionId.startsWith("local-")) {
+    notFound();
   }
 
   return (
     <div className="min-h-screen bg-[color:var(--color-background)]">
       <AnalysisWorkspace
         initialSession={session ?? createLocalSessionShell(sessionId)}
-        initialVideos={videos}
-        proSwings={proSwings}
+        initialVideos={sampleVideos}
+        proSwings={proSwingReferences}
       />
     </div>
   );

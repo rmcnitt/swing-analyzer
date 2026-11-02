@@ -15,7 +15,7 @@ import {
   saveProSwingOverride,
 } from "@/lib/storage/pro-swing-overrides";
 import type { AnalysisSession, ProSwingReference, VideoAsset } from "@/lib/types";
-import { cn, formatDate, formatDuration } from "@/lib/utils";
+import { cn, formatDate, formatDuration, uniqueById } from "@/lib/utils";
 
 interface LibraryBrowserProps {
   sessions: AnalysisSession[];
@@ -47,16 +47,16 @@ export function LibraryBrowser({ sessions, videos, proSwings }: LibraryBrowserPr
     });
   }, [sessions, videos]);
 
-  const allVideos = useMemo(() => uniqueVideos([...storedVideos, ...videos]), [storedVideos, videos]);
+  const allVideos = useMemo(() => uniqueById([...storedVideos, ...videos]), [storedVideos, videos]);
   const allSessions = useMemo(
-    () => uniqueSessions([...storedSessions, ...sessions]),
+    () => uniqueById([...storedSessions, ...sessions]),
     [sessions, storedSessions],
   );
   const videoById = useMemo(
     () => new Map(allVideos.map((video) => [video.id, video])),
     [allVideos],
   );
-  const compareSessionId = allSessions[0]?.id ?? "session-driver-checkpoint";
+  const compareSessionId = allSessions[0]?.id ?? "sample-session";
   const effectiveProSwings = useMemo(
     () => applyProSwingOverrides(proSwings, proSwingOverrides),
     [proSwings, proSwingOverrides],
@@ -231,30 +231,4 @@ function SessionTable({
       </div>
     </div>
   );
-}
-
-function uniqueVideos(videos: VideoAsset[]) {
-  const seen = new Set<string>();
-
-  return videos.filter((video) => {
-    if (seen.has(video.id)) {
-      return false;
-    }
-
-    seen.add(video.id);
-    return true;
-  });
-}
-
-function uniqueSessions(sessions: AnalysisSession[]) {
-  const seen = new Set<string>();
-
-  return sessions.filter((session) => {
-    if (seen.has(session.id)) {
-      return false;
-    }
-
-    seen.add(session.id);
-    return true;
-  });
 }

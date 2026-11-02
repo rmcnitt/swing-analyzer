@@ -18,23 +18,13 @@ import {
   saveStoredSession,
   saveStoredVideo,
 } from "@/lib/storage/session-storage";
-import type {
-  AnalysisSession,
-  DashboardData,
-  SwingOrientation,
-  VideoAsset,
-} from "@/lib/types";
-import { createId, formatDate, formatDuration } from "@/lib/utils";
+import type { AnalysisSession, SwingOrientation, VideoAsset } from "@/lib/types";
+import { createId, formatDate, formatDuration, uniqueById } from "@/lib/utils";
+import { createVideoThumbnail, readVideoMetadata, type VideoFileMetadata } from "@/lib/video/media";
 
 interface SwingHubProps {
-  dashboard: DashboardData;
+  sessions: AnalysisSession[];
   videos: VideoAsset[];
-}
-
-interface ImportMetadata {
-  duration: number;
-  width: number;
-  height: number;
 }
 
 const clubOptions = [
@@ -52,14 +42,14 @@ const clubOptions = [
   "Putter",
 ];
 
-export function SwingHub({ dashboard, videos }: SwingHubProps) {
+export function SwingHub({ sessions, videos }: SwingHubProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [storedSessions, setStoredSessions] = useState<AnalysisSession[]>([]);
   const [storedVideos, setStoredVideos] = useState<VideoAsset[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [metadata, setMetadata] = useState<ImportMetadata | null>(null);
+  const [metadata, setMetadata] = useState<VideoFileMetadata | null>(null);
   const [sessionName, setSessionName] = useState("");
   const [club, setClub] = useState("7 Iron");
   const [orientation, setOrientation] = useState<SwingOrientation>("face-on");
@@ -68,7 +58,7 @@ export function SwingHub({ dashboard, videos }: SwingHubProps) {
 
   useEffect(() => {
     void initializeLocalLibrary({
-      sessions: dashboard.sessions,
+      sessions: sessions,
       videos,
     }).then(async () => {
       const [nextSessions, nextVideos] = await Promise.all([
@@ -79,12 +69,12 @@ export function SwingHub({ dashboard, videos }: SwingHubProps) {
       setStoredSessions(nextSessions);
       setStoredVideos(nextVideos);
     });
-  }, [dashboard.sessions, videos]);
+  }, [sessions, videos]);
 
-  const allVideos = useMemo(() => uniqueVideos([...storedVideos, ...videos]), [storedVideos, videos]);
+  const allVideos = useMemo(() => uniqueById([...storedVideos, ...videos]), [storedVideos, videos]);
   const allSessions = useMemo(
-    () => uniqueSessions([...storedSessions, ...dashboard.sessions]),
-    [dashboard.sessions, storedSessions],
+    () => uniqueById([...storedSessions, ...sessions]),
+    [sessions, storedSessions],
   );
 
   const videoById = useMemo(
@@ -229,14 +219,14 @@ export function SwingHub({ dashboard, videos }: SwingHubProps) {
           </p>
           <div className="mt-2 grid grid-cols-2 gap-2">
             <Link
-              href={`/analysis/${recentSessions[0]?.id ?? "session-iron-baseline"}`}
+              href={`/analysis/${recentSessions[0]?.id ?? "sample-session"}`}
               className="flex h-9 items-center justify-center gap-2 border border-[color:var(--color-border)] text-xs text-white hover:border-[color:var(--color-accent)]"
             >
               <FolderOpen className="size-4" />
               Open latest
             </Link>
             <Link
-              href={`/analysis/${recentSessions[0]?.id ?? "session-iron-baseline"}?compare=true`}
+              href={`/analysis/${recentSessions[0]?.id ?? "sample-session"}?compare=true`}
               className="flex h-9 items-center justify-center gap-2 border border-[color:var(--color-border)] text-xs text-white hover:border-[color:var(--color-accent)]"
             >
               <Columns2 className="size-4" />
@@ -410,91 +400,4 @@ export function SwingHub({ dashboard, videos }: SwingHubProps) {
       </section>
     </main>
   );
-}
-
-function uniqueVideos(videos: VideoAsset[]) {
-  const seen = new Set<string>();
-
-  return videos.filter((video) => {
-    if (seen.has(video.id)) {
-      return false;
-    }
-
-    seen.add(video.id);
-    return true;
-  });
-}
-
-function uniqueSessions(sessions: AnalysisSession[]) {
-  const seen = new Set<string>();
-
-  return sessions.filter((session) => {
-    if (seen.has(session.id)) {
-      return false;
-    }
-
-    seen.add(session.id);
-    return true;
-  });
-}
-
-function readVideoMetadata(url: string) {
-  return new Promise<ImportMetadata>((resolve) => {
-    const element = document.createElement("video");
-
-    element.preload = "metadata";
-    element.src = url;
-
-    element.onloadedmetadata = () => {
-      resolve({
-        duration: element.duration || 0,
-        width: element.videoWidth || 0,
-        height: element.videoHeight || 0,
-      });
-    };
-
-    element.onerror = () => {
-      resolve({
-        duration: 0,
-        width: 0,
-        height: 0,
-      });
-    };
-  });
-}
-
-function createVideoThumbnail(url: string) {
-  return new Promise<Blob | null>((resolve) => {
-    const video = document.createElement("video");
-
-    video.crossOrigin = "anonymous";
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = "metadata";
-    video.src = url;
-
-    const capture = () => {
-      const width = video.videoWidth || 640;
-      const height = video.videoHeight || 360;
-      const canvas = document.createElement("canvas");
-      canvas.width = 320;
-      canvas.height = Math.round((canvas.width / width) * height);
-
-      const context = canvas.getContext("2d");
-
-      if (!context) {
-        resolve(null);
-        return;
-      }
-
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.72);
-    };
-
-    video.onloadeddata = () => {
-      video.currentTime = Math.min(0.1, video.duration || 0);
-    };
-    video.onseeked = capture;
-    video.onerror = () => resolve(null);
-  });
 }

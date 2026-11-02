@@ -15,7 +15,7 @@ interface ProSwingCardProps {
 
 export function ProSwingCard({
   swing,
-  compareSessionId = "session-driver-checkpoint",
+  compareSessionId = "sample-session",
   onSaveOverride,
 }: ProSwingCardProps) {
   const [isEditing, setIsEditing] = useState(false);

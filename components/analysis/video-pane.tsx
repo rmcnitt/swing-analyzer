@@ -22,31 +22,14 @@ import type {
   AnnotationObject,
   AnnotationTool,
   HexColor,
+  MarkerSeekSignal,
   PaneId,
+  PlaybackSignal,
   SnapshotMarker,
+  SyncSignal,
   VideoAsset,
 } from "@/lib/types";
 import { cn, formatDuration, getVideoLabel } from "@/lib/utils";
-
-interface SyncSignal {
-  paneId: PaneId;
-  time: number;
-  version: number;
-}
-
-interface PlaybackSignal {
-  paneId: PaneId;
-  action: "play" | "pause" | "seek" | "rate";
-  time?: number;
-  rate?: number;
-  version: number;
-}
-
-interface MarkerSeekSignal {
-  paneId: PaneId;
-  time: number;
-  version: number;
-}
 
 interface VideoPaneProps {
   pane: AnalysisPane;

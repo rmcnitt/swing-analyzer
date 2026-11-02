@@ -61,22 +61,6 @@ export interface ProSwingReference {
   thumbnailUrl: string;
 }
 
-export interface ProSwing {
-  id: string;
-  golferName: string;
-  handedness: Handedness;
-  clubType: string;
-  tags: string[];
-  publishStatus: "draft" | "published";
-  orientation: SwingOrientation;
-  videoAsset: VideoAsset;
-}
-
-export interface AppPreferences {
-  activeTool?: AnnotationTool;
-  activeColor?: HexColor;
-}
-
 export interface AnalysisPane {
   id: PaneId;
   label: string;
@@ -156,9 +140,23 @@ export interface AnalysisSession {
   selectedProSwingId?: string;
 }
 
-export interface DashboardData {
-  userName: string;
-  videos: VideoAsset[];
-  sessions: AnalysisSession[];
-  proSwings: ProSwingReference[];
+/** Cross-pane coordination messages; `version` makes repeated identical signals distinct. */
+export interface SyncSignal {
+  paneId: PaneId;
+  time: number;
+  version: number;
+}
+
+export interface PlaybackSignal {
+  paneId: PaneId;
+  action: "play" | "pause" | "seek" | "rate";
+  time?: number;
+  rate?: number;
+  version: number;
+}
+
+export interface MarkerSeekSignal {
+  paneId: PaneId;
+  time: number;
+  version: number;
 }

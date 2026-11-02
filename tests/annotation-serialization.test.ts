@@ -27,7 +27,9 @@ describe("annotation serialization", () => {
     const restored = parseAnnotations(payload);
 
     expect(restored).toHaveLength(1);
-    expect(restored[0].geometry.kind).toBe("line");
-    expect(restored[0].geometry.points[0].x).toBeCloseTo(0.2);
+    const geometry = restored[0].geometry;
+    expect(geometry.kind).toBe("line");
+    if (geometry.kind !== "line") throw new Error("expected line geometry");
+    expect(geometry.points[0].x).toBeCloseTo(0.2);
   });
 });

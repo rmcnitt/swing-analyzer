@@ -9,6 +9,8 @@
     "build": "npm run pro-swings:generate && next build",
     "start": "next start",
     "lint": "eslint .",
+    "pretypecheck": "npm run pro-swings:generate",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },

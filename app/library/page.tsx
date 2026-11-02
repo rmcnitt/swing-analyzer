@@ -1,21 +1,16 @@
 import { LibraryBrowser } from "@/components/library/library-browser";
 import { SiteHeader } from "@/components/site/site-header";
-import { getAllVideos, getDashboardData, getProSwings } from "@/lib/data/repository";
+import { proSwingReferences } from "@/lib/data/pro-swings";
+import { sampleSessions, sampleVideos } from "@/lib/data/seed";
 
-export default async function LibraryPage() {
-  const [dashboard, videos, proSwings] = await Promise.all([
-    getDashboardData(),
-    getAllVideos(),
-    getProSwings(),
-  ]);
-
+export default function LibraryPage() {
   return (
     <div className="min-h-screen bg-[color:var(--color-background)]">
       <SiteHeader currentPath="/library" />
       <LibraryBrowser
-        sessions={dashboard.sessions}
-        videos={videos}
-        proSwings={proSwings}
+        sessions={sampleSessions}
+        videos={sampleVideos}
+        proSwings={proSwingReferences}
       />
     </div>
   );

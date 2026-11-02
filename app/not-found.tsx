@@ -11,8 +11,8 @@ export default function NotFound() {
         </p>
         <h1 className="mt-4 text-5xl font-semibold text-white">That swing workspace does not exist.</h1>
         <p className="mt-5 max-w-2xl text-base leading-8 text-slate-300">
-          Try the seeded demo sessions from the dashboard, or create a new study
-          flow from the landing page.
+          It may have been created in another browser. Sessions are stored locally on this
+          device. Import a swing from the hub to start a new one.
         </p>
         <Link
           href="/"

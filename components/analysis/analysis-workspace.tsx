@@ -34,12 +34,16 @@ import type {
   AnnotationObject,
   AnnotationTool,
   HexColor,
+  MarkerSeekSignal,
   PaneId,
+  PlaybackSignal,
   ProSwingReference,
   SnapshotMarker,
+  SyncSignal,
   VideoAsset,
 } from "@/lib/types";
-import { createId } from "@/lib/utils";
+import { createId, uniqueById } from "@/lib/utils";
+import { createVideoThumbnail, readVideoMetadata, type VideoFileMetadata } from "@/lib/video/media";
 
 interface AnalysisWorkspaceProps {
   initialSession: AnalysisSession;
@@ -47,31 +51,7 @@ interface AnalysisWorkspaceProps {
   proSwings?: ProSwingReference[];
 }
 
-interface VideoMetadataPatch {
-  duration?: number;
-  width?: number;
-  height?: number;
-}
-
-interface SyncSignal {
-  paneId: PaneId;
-  time: number;
-  version: number;
-}
-
-interface PlaybackSignal {
-  paneId: PaneId;
-  action: "play" | "pause" | "seek" | "rate";
-  time?: number;
-  rate?: number;
-  version: number;
-}
-
-interface MarkerSeekSignal {
-  paneId: PaneId;
-  time: number;
-  version: number;
-}
+type VideoMetadataPatch = Partial<VideoFileMetadata>;
 
 function replacePane(
   panes: AnalysisPane[],
@@ -79,19 +59,6 @@ function replacePane(
   patch: Partial<AnalysisPane>,
 ) {
   return panes.map((pane) => (pane.id === paneId ? { ...pane, ...patch } : pane));
-}
-
-function uniqueVideos(videos: VideoAsset[]) {
-  const seen = new Set<string>();
-
-  return videos.filter((video) => {
-    if (seen.has(video.id)) {
-      return false;
-    }
-
-    seen.add(video.id);
-    return true;
-  });
 }
 
 function panePatchIsNoOp(pane: AnalysisPane, patch: Partial<AnalysisPane>) {
@@ -171,7 +138,7 @@ export function AnalysisWorkspace({
     return () => window.clearTimeout(timeout);
   }, [session, hydrated]);
 
-  const videos = uniqueVideos([...uploadedVideos, ...initialVideos]).map((video) => ({
+  const videos = uniqueById([...uploadedVideos, ...initialVideos]).map((video) => ({
     ...video,
     ...videoMetadataById[video.id],
   }));
@@ -463,7 +430,7 @@ export function AnalysisWorkspace({
   };
 
   const effectiveProSwings = applyProSwingOverrides(proSwings, proSwingOverrides);
-  const allVideos = uniqueVideos([...videos, ...effectiveProSwings.map(proSwingToVideoAsset)]).map(
+  const allVideos = uniqueById([...videos, ...effectiveProSwings.map(proSwingToVideoAsset)]).map(
     (video) => ({
       ...video,
       ...videoMetadataById[video.id],
@@ -665,67 +632,4 @@ export function AnalysisWorkspace({
       </div>
     </div>
   );
-}
-
-function readVideoMetadata(url: string) {
-  return new Promise<Required<VideoMetadataPatch>>((resolve) => {
-    const element = document.createElement("video");
-
-    element.preload = "metadata";
-    element.src = url;
-
-    element.onloadedmetadata = () => {
-      resolve({
-        duration: element.duration || 0,
-        width: element.videoWidth || 0,
-        height: element.videoHeight || 0,
-      });
-      element.src = "";
-    };
-
-    element.onerror = () => {
-      resolve({
-        duration: 0,
-        width: 0,
-        height: 0,
-      });
-      element.src = "";
-    };
-  });
-}
-
-function createVideoThumbnail(url: string) {
-  return new Promise<Blob | null>((resolve) => {
-    const video = document.createElement("video");
-
-    video.crossOrigin = "anonymous";
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = "metadata";
-    video.src = url;
-
-    const capture = () => {
-      const width = video.videoWidth || 640;
-      const height = video.videoHeight || 360;
-      const canvas = document.createElement("canvas");
-      canvas.width = 320;
-      canvas.height = Math.round((canvas.width / width) * height);
-
-      const context = canvas.getContext("2d");
-
-      if (!context) {
-        resolve(null);
-        return;
-      }
-
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.72);
-    };
-
-    video.onloadeddata = () => {
-      video.currentTime = Math.min(0.1, video.duration || 0);
-    };
-    video.onseeked = capture;
-    video.onerror = () => resolve(null);
-  });
 }
