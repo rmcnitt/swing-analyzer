@@ -15,7 +15,8 @@ export const videoSchema = z.object({
     .enum(["user", "reference", "pro", "local"])
     .transform((value) => (value === "pro" ? "reference" : value === "local" ? "user" : value)),
   duration: z.number(),
-  fps: z.number().optional(),
+  fps: z.number().positive().optional(),
+  fpsSource: z.enum(["detected", "manual"]).optional(),
   orientation: z.enum(["face-on", "down-the-line"]),
   clubTag: z.string(),
   uploadStatus: z.enum(["ready", "processing"]),

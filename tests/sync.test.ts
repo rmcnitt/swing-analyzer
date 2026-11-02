@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { frameStepForFps, shouldSyncToLeader } from "@/lib/analysis/sync";
+import { shouldSyncToLeader } from "@/lib/analysis/sync";
 
 describe("sync helpers", () => {
   it("skips a seek when panes are already close", () => {
@@ -21,10 +21,5 @@ describe("sync helpers", () => {
 
     expect(result.shouldSeek).toBe(false);
     expect(result.nextTime).toBe(1.998);
-  });
-
-  it("uses a default frame step when fps is unknown", () => {
-    expect(frameStepForFps()).toBeCloseTo(1 / 120);
-    expect(frameStepForFps(240)).toBeCloseTo(1 / 240);
   });
 });

@@ -24,11 +24,3 @@ export function shouldSyncToLeader(
     nextTime: clamp(leaderTime, 0, Number.MAX_SAFE_INTEGER),
   };
 }
-
-export function frameStepForFps(fps?: number) {
-  if (!fps || fps <= 0) {
-    return 1 / 120;
-  }
-
-  return 1 / fps;
-}

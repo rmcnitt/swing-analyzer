@@ -15,7 +15,9 @@ import {
 } from "lucide-react";
 import { AnnotationCanvas } from "@/components/analysis/annotation-canvas";
 import { Timeline } from "@/components/analysis/timeline";
-import { frameStepForFps, shouldSyncToLeader } from "@/lib/analysis/sync";
+import { DEFAULT_FPS, frameRateChoices, stepFrameTime } from "@/lib/analysis/frames";
+import { shouldSyncToLeader } from "@/lib/analysis/sync";
+import { detectVideoFps } from "@/lib/video/media";
 import { getContainedStageSize, getVideoAspectRatio } from "@/lib/video-layout";
 import type {
   AnalysisPane,
@@ -59,6 +61,7 @@ interface VideoPaneProps {
     },
   ) => void;
   onRenameVideo: (videoId: string, title: string) => void;
+  onSetVideoFps: (videoId: string, fps: number, source: "detected" | "manual") => void;
   onUpdatePane: (paneId: PaneId, patch: Partial<AnalysisPane>) => void;
   onEmitSync: (paneId: PaneId, time: number) => void;
   onEmitPlayback: (
@@ -92,6 +95,7 @@ export function VideoPane({
   onUploadVideo,
   onVideoMetadata,
   onRenameVideo,
+  onSetVideoFps,
   onUpdatePane,
   onEmitSync,
   onEmitPlayback,
@@ -147,6 +151,27 @@ export function VideoPane({
 
     videoRef.current.playbackRate = pane.playbackRate;
   }, [pane.playbackRate]);
+
+  // Legacy imports and samples have a guessed fps; measure it once in the background.
+  const fpsDetectionAttemptedRef = useRef(new Set<string>());
+  const needsFpsDetection = Boolean(
+    video && !video.fpsSource && video.url && !video.url.startsWith("indexeddb"),
+  );
+
+  useEffect(() => {
+    if (!video || !needsFpsDetection || fpsDetectionAttemptedRef.current.has(video.id)) {
+      return;
+    }
+
+    fpsDetectionAttemptedRef.current.add(video.id);
+    const videoId = video.id;
+
+    void detectVideoFps(video.url).then((fps) => {
+      if (fps) {
+        onSetVideoFps(videoId, fps, "detected");
+      }
+    });
+  }, [needsFpsDetection, onSetVideoFps, video]);
 
   useEffect(() => {
     void Promise.resolve().then(() => {
@@ -273,8 +298,14 @@ export function VideoPane({
   };
 
   const stepBy = (direction: -1 | 1) => {
-    const increment = frameStepForFps(video?.fps);
-    seekTo((videoRef.current?.currentTime ?? 0) + increment * direction);
+    const element = videoRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    element.pause();
+    seekTo(stepFrameTime(element.currentTime, video?.fps, direction, duration || element.duration || 0));
   };
 
   const handleTimeUpdate = () => {
@@ -686,6 +717,26 @@ export function VideoPane({
             <p className="hidden min-w-24 text-right font-mono text-xs text-[color:var(--color-muted)] sm:block">
               {formatDuration(pane.currentTime)} / {formatDuration(duration)}
             </p>
+
+            {video ? (
+              <select
+                value={video.fps ?? DEFAULT_FPS}
+                onChange={(event) => onSetVideoFps(video.id, Number(event.target.value), "manual")}
+                className="hidden h-8 border border-[color:var(--color-border)] bg-[#0b0c0e] px-1.5 font-mono text-xs text-white outline-none md:block"
+                aria-label="Clip frame rate"
+                title={
+                  video.fpsSource === "detected"
+                    ? "Frame rate (detected). Change it if frame stepping skips or repeats frames."
+                    : "Frame rate. Set it to the clip's real rate for exact frame stepping."
+                }
+              >
+                {frameRateChoices(video.fps).map((option) => (
+                  <option key={option} value={option}>
+                    {option} fps
+                  </option>
+                ))}
+              </select>
+            ) : null}
 
             <select
               value={pane.playbackRate}

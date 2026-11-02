@@ -1,5 +1,7 @@
 "use client";
 
+import { estimateFpsFromMediaTimes } from "@/lib/analysis/frames";
+
 export interface VideoFileMetadata {
   duration: number;
   width: number;
@@ -67,5 +69,66 @@ export function createVideoThumbnail(url: string) {
     };
     video.onseeked = capture;
     video.onerror = () => resolve(null);
+  });
+}
+
+/**
+ * Measures a clip's frame rate by playing it hidden (muted, quarter speed so even 240fps fits a
+ * 60Hz display) and recording presented frames' media times via requestVideoFrameCallback.
+ * Resolves null where rVFC is unsupported or nothing could be measured.
+ */
+export function detectVideoFps(url: string, timeoutMs = 4000) {
+  return new Promise<number | null>((resolve) => {
+    const video = document.createElement("video");
+
+    if (!("requestVideoFrameCallback" in video)) {
+      resolve(null);
+      return;
+    }
+
+    const mediaTimes: number[] = [];
+    let finished = false;
+
+    const finish = () => {
+      if (finished) {
+        return;
+      }
+
+      finished = true;
+      window.clearTimeout(timer);
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+      video.remove();
+      resolve(estimateFpsFromMediaTimes(mediaTimes));
+    };
+
+    const onFrame: VideoFrameRequestCallback = (_now, metadata) => {
+      mediaTimes.push(metadata.mediaTime);
+
+      if (mediaTimes.length >= 24 || video.ended) {
+        finish();
+        return;
+      }
+
+      video.requestVideoFrameCallback(onFrame);
+    };
+
+    const timer = window.setTimeout(finish, timeoutMs);
+
+    // Some browsers only present frames for videos in the document.
+    video.style.cssText =
+      "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;";
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    video.defaultPlaybackRate = 0.25;
+    video.playbackRate = 0.25;
+    video.onerror = finish;
+    video.onended = finish;
+    video.src = url;
+    document.body.appendChild(video);
+    video.requestVideoFrameCallback(onFrame);
+    void video.play().catch(finish);
   });
 }

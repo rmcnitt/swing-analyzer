@@ -26,7 +26,8 @@ import {
 import { useLocalLibrary } from "@/lib/storage/use-stored-videos";
 import type { AnalysisSession, SwingOrientation, VideoAsset } from "@/lib/types";
 import { createId, formatDate, formatDuration } from "@/lib/utils";
-import { createVideoThumbnail, readVideoMetadata, type VideoFileMetadata } from "@/lib/video/media";
+import { DEFAULT_FPS, frameRateChoices } from "@/lib/analysis/frames";
+import { createVideoThumbnail, detectVideoFps, readVideoMetadata, type VideoFileMetadata } from "@/lib/video/media";
 
 const clubOptions = [
   "Driver",
@@ -55,6 +56,11 @@ export function SwingHub() {
   const [club, setClub] = useState("7 Iron");
   const [orientation, setOrientation] = useState<SwingOrientation>("face-on");
   const [notes, setNotes] = useState("");
+  const [fps, setFps] = useState(DEFAULT_FPS);
+  /** "detecting" while measuring; afterwards whether the current value is measured or chosen. */
+  const [fpsSource, setFpsSource] = useState<"detecting" | "detected" | "manual" | "default">(
+    "default",
+  );
   const [isImporting, setIsImporting] = useState(false);
   const [saveAsReference, setSaveAsReference] = useState(false);
   const [savedReferenceTitle, setSavedReferenceTitle] = useState<string | null>(null);
@@ -98,6 +104,23 @@ export function SwingHub() {
     setMetadata(nextMetadata);
     setSessionName(baseName || "Range swing");
     setSavedReferenceTitle(null);
+    setFps(DEFAULT_FPS);
+    setFpsSource("detecting");
+
+    const detected = await detectVideoFps(nextPreviewUrl);
+
+    // Ignore results for a file the user has since replaced or cancelled.
+    if (previewUrlRef.current !== nextPreviewUrl) {
+      return;
+    }
+
+    if (detected) {
+      setFps(detected);
+    }
+
+    setFpsSource((current) =>
+      current === "detecting" ? (detected ? "detected" : "default") : current,
+    );
   };
 
   const handleCancelImport = () => {
@@ -134,7 +157,9 @@ export function SwingHub() {
       ownerName: saveAsReference ? "Reference" : "Local library",
       sourceType: saveAsReference ? "reference" : "user",
       duration: metadata.duration,
-      fps: 120,
+      fps,
+      fpsSource:
+        fpsSource === "detected" || fpsSource === "manual" ? fpsSource : undefined,
       width: metadata.width,
       height: metadata.height,
       orientation,
@@ -331,6 +356,35 @@ export function SwingHub() {
                   ))}
                 </div>
               </fieldset>
+
+              <label className="block">
+                <span className="text-xs text-[color:var(--color-muted)]">
+                  Frame rate{" "}
+                  <span className="text-[10px]">
+                    {fpsSource === "detecting"
+                      ? "(detecting…)"
+                      : fpsSource === "detected"
+                        ? "(detected)"
+                        : fpsSource === "default"
+                          ? "(couldn't detect; set it for accurate frame stepping)"
+                          : ""}
+                  </span>
+                </span>
+                <select
+                  value={fps}
+                  onChange={(event) => {
+                    setFps(Number(event.target.value));
+                    setFpsSource("manual");
+                  }}
+                  className="mt-1 h-9 w-full border border-[color:var(--color-border)] bg-black/35 px-2.5 text-sm text-white outline-none focus:border-[color:var(--color-accent)]"
+                >
+                  {frameRateChoices(fps).map((option) => (
+                    <option key={option} value={option}>
+                      {option} fps
+                    </option>
+                  ))}
+                </select>
+              </label>
 
               <label className="block">
                 <span className="text-xs text-[color:var(--color-muted)]">Notes / tags</span>

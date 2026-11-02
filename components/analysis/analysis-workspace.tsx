@@ -39,7 +39,8 @@ import type {
   VideoAsset,
 } from "@/lib/types";
 import { createId, uniqueById } from "@/lib/utils";
-import { createVideoThumbnail, readVideoMetadata, type VideoFileMetadata } from "@/lib/video/media";
+import { DEFAULT_FPS } from "@/lib/analysis/frames";
+import { createVideoThumbnail, detectVideoFps, readVideoMetadata, type VideoFileMetadata } from "@/lib/video/media";
 
 interface AnalysisWorkspaceProps {
   sessionId: string;
@@ -340,6 +341,7 @@ function WorkspaceView({
     const probeUrl = URL.createObjectURL(file);
     const metadata = await readVideoMetadata(probeUrl);
     const thumbnail = await createVideoThumbnail(probeUrl);
+    const detectedFps = await detectVideoFps(probeUrl);
     URL.revokeObjectURL(probeUrl);
     const asset: VideoAsset = {
       id: createId("upload"),
@@ -349,7 +351,8 @@ function WorkspaceView({
       ownerName: "Local library",
       sourceType: "user",
       duration: metadata.duration,
-      fps: 120,
+      fps: detectedFps ?? DEFAULT_FPS,
+      fpsSource: detectedFps ? "detected" : undefined,
       width: metadata.width,
       height: metadata.height,
       orientation: "face-on",
@@ -449,6 +452,13 @@ function WorkspaceView({
       }));
     }
   };
+
+  const handleSetVideoFps = useCallback(
+    (videoId: string, fps: number, source: "detected" | "manual") => {
+      void updateStoredVideoMetadata(videoId, { fps, fpsSource: source }).then(reloadVideos);
+    },
+    [reloadVideos],
+  );
 
   const handleEmitSync = useCallback((paneId: PaneId, time: number) => {
     setSyncSignal((current) => {
@@ -640,6 +650,7 @@ function WorkspaceView({
                 onUploadVideo={handleUploadVideo}
                 onVideoMetadata={handleVideoMetadata}
                 onRenameVideo={handleRenameVideo}
+                onSetVideoFps={handleSetVideoFps}
                 onUpdatePane={updatePane}
                 onEmitSync={handleEmitSync}
                 onEmitPlayback={handleEmitPlayback}
