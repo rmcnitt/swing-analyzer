@@ -21,6 +21,14 @@ export interface Point {
   y: number;
 }
 
+/** A rectangle in normalized (0–1) frame coordinates. */
+export interface NormalizedRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface DrawingStyle {
   stroke: HexColor;
   fill?: HexColor;
@@ -45,6 +53,8 @@ export interface VideoAsset {
   fpsSource?: "detected" | "manual";
   /** Original file's MIME type, kept for playback troubleshooting. */
   mimeType?: string;
+  /** Where the golfer is in the frame; used to frame golfers alike when comparing. */
+  golferBox?: NormalizedRect;
   orientation: SwingOrientation;
   clubTag: string;
   uploadStatus: UploadStatus;
@@ -58,6 +68,8 @@ export interface AnalysisPane {
   overlayVisible: boolean;
   playbackRate: number;
   currentTime: number;
+  /** Zoom to the clip's golfer box instead of manual zoom/pan. */
+  fitGolfer?: boolean;
 }
 
 export type AnnotationGeometry =

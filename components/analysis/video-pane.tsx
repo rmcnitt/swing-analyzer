@@ -12,6 +12,8 @@ import {
   Check,
   Pencil,
   Maximize2,
+  ScanSearch,
+  SquareDashed,
   Minus,
   Pause,
   Play,
@@ -36,11 +38,14 @@ import { classifyMediaError, type PlaybackProblem } from "@/lib/video/playback-e
 import { createTimeStore, type TimeStore } from "@/lib/video/time-store";
 import { PlaybackProblemNotice } from "@/components/analysis/playback-problem-notice";
 import { getContainedStageSize, getVideoAspectRatio } from "@/lib/video-layout";
+import { clampPan, fitFraming, MAX_ZOOM, MIN_ZOOM } from "@/lib/analysis/framing";
+import { GolferBoxEditor } from "@/components/analysis/golfer-box-editor";
 import type {
   AnalysisPane,
   AnnotationObject,
   AnnotationTool,
   HexColor,
+  NormalizedRect,
   PaneId,
   SnapshotMarker,
   VideoAsset,
@@ -81,6 +86,7 @@ interface VideoPaneProps {
   onSelectionChange: (paneId: PaneId, annotationId: string | null) => void;
   onAnnotationsChange: (paneId: PaneId, annotations: AnnotationObject[]) => void;
   onJumpToPosition: (paneId: PaneId, label: string) => void;
+  onSetGolferBox: (videoId: string, box: NormalizedRect) => void;
   onMarkPosition: (paneId: PaneId, label: string, time: number) => void;
 }
 
@@ -119,6 +125,7 @@ export function VideoPane({
   onAnnotationsChange,
   onJumpToPosition,
   onMarkPosition,
+  onSetGolferBox,
 }: VideoPaneProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaViewportRef = useRef<HTMLDivElement | null>(null);
@@ -184,8 +191,8 @@ export function VideoPane({
       : mediaError?.url === video.url
         ? mediaError.problem
         : null;
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [manualFraming, setManualFraming] = useState({ zoom: 1, pan: { x: 0, y: 0 } });
+  const [boxMode, setBoxMode] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [draftTitle, setDraftTitle] = useState(video?.title ?? "");
   const [viewportSize, setViewportSize] = useState({
@@ -353,33 +360,37 @@ export function VideoPane({
     setIsRenaming(false);
   };
   const isZoomPanMode = activeTool === "zoom-pan";
-  const canPan = isZoomPanMode && zoom > 1;
-  const clampPan = (nextPan: { x: number; y: number }, nextZoom = zoom) => {
-    const maxX = (stageSize.width * (nextZoom - 1)) / 2;
-    const maxY = (stageSize.height * (nextZoom - 1)) / 2;
+  const golferBox = video?.golferBox;
+  const fitted =
+    pane.fitGolfer && golferBox && !boxMode && stageSize.width > 0
+      ? fitFraming(golferBox, stageSize, viewportSize)
+      : null;
+  // While drawing the golfer box, show the whole frame.
+  const zoom = boxMode ? 1 : (fitted?.zoom ?? manualFraming.zoom);
+  const pan = boxMode ? { x: 0, y: 0 } : (fitted?.pan ?? manualFraming.pan);
+  const canPan = isZoomPanMode && zoom > 1 && !boxMode;
 
-    return {
-      x: Math.min(maxX, Math.max(-maxX, nextPan.x)),
-      y: Math.min(maxY, Math.max(-maxY, nextPan.y)),
-    };
+  /** Manual zoom/pan starts from whatever is on screen, so leaving "fit" doesn't jump. */
+  const setFraming = (next: { zoom: number; pan: { x: number; y: number } }) => {
+    const nextZoom = clamp(Number(next.zoom.toFixed(2)), MIN_ZOOM, MAX_ZOOM);
+    setManualFraming({ zoom: nextZoom, pan: clampPan(next.pan, stageSize, nextZoom) });
+
+    if (pane.fitGolfer) {
+      onUpdatePane(pane.id, { fitGolfer: false });
+    }
   };
 
-  const updateZoom = (nextZoom: number) => {
-    const clampedZoom = Math.min(4, Math.max(1, Number(nextZoom.toFixed(2))));
+  const updateZoom = (nextZoom: number) => setFraming({ zoom: nextZoom, pan });
 
-    setZoom(clampedZoom);
+  const resetZoom = () => setFraming({ zoom: 1, pan: { x: 0, y: 0 } });
 
-    if (clampedZoom === 1) {
-      setPan({ x: 0, y: 0 });
+  const toggleFitGolfer = () => {
+    if (!golferBox) {
+      setBoxMode(true);
       return;
     }
 
-    setPan((current) => clampPan(current, clampedZoom));
- };
-
-  const resetZoom = () => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
+    onUpdatePane(pane.id, { fitGolfer: !pane.fitGolfer });
   };
 
   const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
@@ -410,12 +421,13 @@ export function VideoPane({
       return;
     }
 
-    setPan(
-      clampPan({
+    setFraming({
+      zoom,
+      pan: {
         x: panStartRef.current.panX + event.clientX - panStartRef.current.pointerX,
         y: panStartRef.current.panY + event.clientY - panStartRef.current.pointerY,
-      }),
-    );
+      },
+    });
   };
 
   const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
@@ -536,6 +548,38 @@ export function VideoPane({
             >
               <Maximize2 className="size-3.5" />
             </button>
+            <button
+              type="button"
+              onClick={toggleFitGolfer}
+              disabled={!video}
+              aria-pressed={Boolean(pane.fitGolfer && golferBox)}
+              className={cn(
+                "flex h-[26px] items-center gap-1 px-1.5 text-[10px] uppercase tracking-[0.1em] disabled:opacity-40",
+                pane.fitGolfer && golferBox
+                  ? "bg-[color:var(--color-accent)]/20 text-white"
+                  : "text-[color:var(--color-muted)] hover:bg-white/[0.06] hover:text-white",
+              )}
+              aria-label="Fit golfer"
+              title={
+                golferBox
+                  ? "Zoom so the golfer fills the pane (matches framing across panes)"
+                  : "Fit golfer: first drag a box around the golfer"
+              }
+            >
+              <ScanSearch className="size-3.5" />
+              Fit
+            </button>
+            {golferBox ? (
+              <button
+                type="button"
+                onClick={() => setBoxMode(true)}
+                className="flex size-[26px] items-center justify-center text-[color:var(--color-muted)] hover:bg-white/[0.06] hover:text-white"
+                aria-label="Redraw golfer box"
+                title="Redraw golfer box"
+              >
+                <SquareDashed className="size-3.5" />
+              </button>
+            ) : null}
           </div>
 
           <label className="border border-[color:var(--color-border)] px-2 py-1.5 text-xs text-white hover:border-[color:var(--color-accent)]">
@@ -682,6 +726,18 @@ export function VideoPane({
                   onSelectionChange={(annotationId) => onSelectionChange(pane.id, annotationId)}
                   onChange={(next) => onAnnotationsChange(pane.id, next)}
                 />
+
+                {boxMode ? (
+                  <GolferBoxEditor
+                    initialBox={golferBox}
+                    onCancel={() => setBoxMode(false)}
+                    onCommit={(box) => {
+                      setBoxMode(false);
+                      onSetGolferBox(video.id, box);
+                      onUpdatePane(pane.id, { fitGolfer: true });
+                    }}
+                  />
+                ) : null}
               </div>
             </div>
           ) : (

@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+const normalizedRectSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  width: z.number(),
+  height: z.number(),
+});
+
 export const videoSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -18,6 +25,7 @@ export const videoSchema = z.object({
   fps: z.number().positive().optional(),
   fpsSource: z.enum(["detected", "manual"]).optional(),
   mimeType: z.string().optional(),
+  golferBox: normalizedRectSchema.optional(),
   orientation: z.enum(["face-on", "down-the-line"]),
   clubTag: z.string(),
   uploadStatus: z.enum(["ready", "processing"]),
@@ -114,6 +122,7 @@ export const sessionSchema = z.object({
       overlayVisible: z.boolean(),
       playbackRate: z.number(),
       currentTime: z.number().min(0),
+      fitGolfer: z.boolean().optional(),
     }),
   ),
   annotations: z.object({

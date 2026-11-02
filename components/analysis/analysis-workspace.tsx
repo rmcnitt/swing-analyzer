@@ -35,6 +35,7 @@ import type {
   AnnotationObject,
   AnnotationTool,
   HexColor,
+  NormalizedRect,
   PaneId,
   SnapshotMarker,
   VideoAsset,
@@ -149,7 +150,7 @@ function loadReferenceIntoSecondary(
   };
 }
 
-type VideoMetadataPatch = Partial<VideoFileMetadata>;
+type VideoMetadataPatch = Partial<VideoFileMetadata> & Pick<VideoAsset, "golferBox">;
 
 function replacePane(
   panes: AnalysisPane[],
@@ -564,6 +565,20 @@ function WorkspaceView({
     }
   };
 
+  const handleSetGolferBox = (videoId: string, golferBox: NormalizedRect) => {
+    // Apply right away; the stored copy catches up on reload.
+    handleVideoMetadata(videoId, { golferBox });
+    void updateStoredVideoMetadata(videoId, { golferBox });
+  };
+
+  const handleFitBoth = () => {
+    session.panes.forEach((pane) => {
+      if (getVideo(pane.videoId)?.golferBox) {
+        updatePane(pane.id, { fitGolfer: true });
+      }
+    });
+  };
+
   const handleSetVideoFps = useCallback(
     (videoId: string, fps: number, source: "detected" | "manual") => {
       void updateStoredVideoMetadata(videoId, { fps, fpsSource: source }).then(reloadVideos);
@@ -784,6 +799,10 @@ function WorkspaceView({
               checkpoints={checkpoints}
               onJumpBoth={handleJumpBoth}
               onToggleSync={handleToggleSync}
+              framedPaneCount={
+                visiblePanes.filter((pane) => getVideo(pane.videoId)?.golferBox).length
+              }
+              onFitBoth={handleFitBoth}
             />
           ) : null}
           <div
@@ -825,6 +844,7 @@ function WorkspaceView({
                 onAnnotationsChange={updateAnnotations}
                 onJumpToPosition={handleJumpToPosition}
                 onMarkPosition={addMarker}
+                onSetGolferBox={handleSetGolferBox}
               />
             ))}
           </div>

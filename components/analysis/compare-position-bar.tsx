@@ -1,6 +1,6 @@
 "use client";
 
-import { Link2, Link2Off } from "lucide-react";
+import { Link2, Link2Off, ScanSearch } from "lucide-react";
 import { positionKey, SWING_POSITIONS } from "@/lib/analysis/positions";
 import type { MatchedCheckpoint } from "@/lib/analysis/sync";
 import type { PaneId } from "@/lib/types";
@@ -12,6 +12,9 @@ interface ComparePositionBarProps {
   checkpoints: MatchedCheckpoint[];
   onJumpBoth: (label: string) => void;
   onToggleSync: () => void;
+  /** Panes whose clip has a golfer box (so "fit" can frame it). */
+  framedPaneCount: number;
+  onFitBoth: () => void;
 }
 
 function syncSummary(syncEnabled: boolean, checkpoints: MatchedCheckpoint[]) {
@@ -38,6 +41,8 @@ export function ComparePositionBar({
   checkpoints,
   onJumpBoth,
   onToggleSync,
+  framedPaneCount,
+  onFitBoth,
 }: ComparePositionBarProps) {
   const matchedKeys = new Set(checkpoints.map((checkpoint) => checkpoint.key));
 
@@ -63,42 +68,59 @@ export function ComparePositionBar({
         </p>
       </div>
 
-      <div className="flex items-center gap-1 overflow-x-auto" role="group" aria-label="Jump both panes to a position">
-        <span className="mr-1 hidden text-[10px] uppercase tracking-[0.14em] text-[color:var(--color-muted)] md:inline">
-          Both to
-        </span>
-        {SWING_POSITIONS.map((label) => {
-          const key = positionKey(label);
-          const inPrimary = positionsByPane.primary.has(key);
-          const inSecondary = positionsByPane.secondary.has(key);
-          const available = inPrimary || inSecondary;
-          const matched = matchedKeys.has(key);
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <div className="flex items-center gap-1 overflow-x-auto" role="group" aria-label="Jump both panes to a position">
+          <span className="mr-1 hidden text-[10px] uppercase tracking-[0.14em] text-[color:var(--color-muted)] md:inline">
+            Both to
+          </span>
+          {SWING_POSITIONS.map((label) => {
+            const key = positionKey(label);
+            const inPrimary = positionsByPane.primary.has(key);
+            const inSecondary = positionsByPane.secondary.has(key);
+            const available = inPrimary || inSecondary;
+            const matched = matchedKeys.has(key);
 
-          return (
-            <button
-              key={label}
-              type="button"
-              disabled={!available}
-              onClick={() => onJumpBoth(label)}
-              title={
-                matched
-                  ? `Show ${label} in both swings`
-                  : available
-                    ? `${label} is only marked in the ${inPrimary ? "left" : "right"} swing`
-                    : `Mark ${label} in a swing first`
-              }
-              className={cn(
-                "h-7 shrink-0 border px-2 text-[11px]",
-                matched
-                  ? "border-white/20 text-white hover:border-[color:var(--color-accent)] hover:bg-[color:var(--color-accent)]/14"
-                  : "border-dashed border-white/12 text-[color:var(--color-muted)] hover:text-white",
-                "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-[color:var(--color-muted)]",
-              )}
-            >
-              {label}
-            </button>
-          );
-        })}
+            return (
+              <button
+                key={label}
+                type="button"
+                disabled={!available}
+                onClick={() => onJumpBoth(label)}
+                title={
+                  matched
+                    ? `Show ${label} in both swings`
+                    : available
+                      ? `${label} is only marked in the ${inPrimary ? "left" : "right"} swing`
+                      : `Mark ${label} in a swing first`
+                }
+                className={cn(
+                  "h-7 shrink-0 border px-2 text-[11px]",
+                  matched
+                    ? "border-white/20 text-white hover:border-[color:var(--color-accent)] hover:bg-[color:var(--color-accent)]/14"
+                    : "border-dashed border-white/12 text-[color:var(--color-muted)] hover:text-white",
+                  "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-[color:var(--color-muted)]",
+                )}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={onFitBoth}
+          disabled={framedPaneCount === 0}
+          title={
+            framedPaneCount === 2
+              ? "Zoom both panes so the golfers appear the same size"
+              : "Use Fit in each pane's header to box the golfer first"
+          }
+          className="flex h-7 shrink-0 items-center gap-1 border border-white/20 px-2 text-[11px] text-white hover:border-[color:var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <ScanSearch className="size-3.5" />
+          Fit both
+        </button>
       </div>
     </div>
   );
