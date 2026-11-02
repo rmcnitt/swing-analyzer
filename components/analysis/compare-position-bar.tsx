@@ -94,7 +94,7 @@ export function ComparePositionBar({
                       : `Mark ${label} in a swing first`
                 }
                 className={cn(
-                  "h-7 shrink-0 border px-2 text-[11px]",
+                  "h-7 shrink-0 border px-2 text-[11px] pointer-coarse:h-9",
                   matched
                     ? "border-white/20 text-white hover:border-[color:var(--color-accent)] hover:bg-[color:var(--color-accent)]/14"
                     : "border-dashed border-white/12 text-[color:var(--color-muted)] hover:text-white",

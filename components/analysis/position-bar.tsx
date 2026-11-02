@@ -26,14 +26,15 @@ export function PositionBar({ timeStore, fps, positions, onJump, onMark }: Posit
   const currentFrame = frameIndexAt(currentTime, fps);
 
   return (
-    <div className="mt-1.5 flex items-center gap-1 overflow-x-auto" role="group" aria-label="Swing positions">
+    // Hidden in very narrow panes (phones); positions stay reachable from the Markers tab.
+    <div className="mt-1.5 hidden items-center gap-1 overflow-x-auto @sm:flex" role="group" aria-label="Swing positions">
       <button
         type="button"
         onClick={() => setMarkMode((current) => !current)}
         aria-pressed={markMode}
         title={markMode ? "Cancel" : "Set a position at the current frame"}
         className={cn(
-          "flex h-7 shrink-0 items-center gap-1 border px-1.5 text-[11px]",
+          "flex h-7 shrink-0 items-center gap-1 border px-1.5 text-[11px] pointer-coarse:h-9",
           markMode
             ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)] text-[color:var(--color-ink)]"
             : "border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:border-white/25 hover:text-white",
@@ -66,7 +67,7 @@ export function PositionBar({ timeStore, fps, positions, onJump, onMark }: Posit
                 : `Jump to ${label} (${formatTimecode(time)})`
             }
             className={cn(
-              "h-7 shrink-0 border px-2 text-[11px] transition",
+              "h-7 shrink-0 border px-2 text-[11px] transition pointer-coarse:h-9",
               markMode
                 ? "border-dashed border-[color:var(--color-accent)] text-white hover:bg-[color:var(--color-accent)]/20"
                 : isHere

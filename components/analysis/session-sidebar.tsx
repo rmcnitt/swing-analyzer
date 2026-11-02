@@ -31,6 +31,8 @@ interface SessionSidebarProps {
   onRenameMarker: (markerId: string, label: string) => void;
   onDeleteMarker: (markerId: string) => void;
   onLoadReference: (videoId: string) => void;
+  /** Shown as a close button when the inspector is a drawer (below xl). */
+  onClose: () => void;
 }
 
 const markerLabels = [
@@ -61,6 +63,7 @@ export function SessionSidebar({
   onRenameMarker,
   onDeleteMarker,
   onLoadReference,
+  onClose,
 }: SessionSidebarProps) {
   const [activeTab, setActiveTab] = useState<"notes" | "markers" | "session">("notes");
   const [markerLabel, setMarkerLabel] = useState("Impact");
@@ -89,11 +92,21 @@ export function SessionSidebar({
 
   return (
     <aside className="flex h-full min-h-0 flex-col border-l border-[color:var(--color-border)] bg-[#0f1012]">
-      <div className="border-b border-[color:var(--color-border)] px-2.5 py-2.5">
-        <p className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--color-muted)]">
-          Inspector
-        </p>
-        <h2 className="mt-1 truncate text-sm font-semibold text-white">{sessionTitle}</h2>
+      <div className="flex items-start justify-between gap-2 border-b border-[color:var(--color-border)] px-2.5 py-2.5">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--color-muted)]">
+            Inspector
+          </p>
+          <h2 className="mt-1 truncate text-sm font-semibold text-white">{sessionTitle}</h2>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex size-8 shrink-0 items-center justify-center text-[color:var(--color-muted)] hover:bg-white/[0.06] hover:text-white xl:hidden"
+          aria-label="Close inspector"
+        >
+          <X className="size-4" />
+        </button>
       </div>
 
       <div className="grid grid-cols-3 border-b border-[color:var(--color-border)]">

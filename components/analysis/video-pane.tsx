@@ -506,16 +506,16 @@ export function VideoPane({
   return (
     <section
       className={cn(
-        "flex min-h-0 flex-col transition",
-        compareMode ? "border-y border-r first:border-l" : "border",
+        // @container: controls adapt to the pane's own width (half the screen when comparing).
+        "@container flex min-h-0 flex-col border transition",
         isActive
           ? "border-[color:var(--color-accent)] bg-[#111214]"
           : "border-[color:var(--color-border)] bg-[#0d0e10]",
       )}
       onClick={() => onActivate(pane.id)}
     >
-      <div className="flex min-h-10 items-center justify-between gap-2 border-b border-[color:var(--color-border)] bg-[#141517] px-2.5">
-        <div className="min-w-0">
+      <div className="flex min-h-10 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-[color:var(--color-border)] bg-[#141517] px-2.5 py-1">
+        <div className="min-w-0 flex-1 basis-40">
           <div className="flex items-center gap-2">
             <span
               className={cn(
@@ -572,7 +572,7 @@ export function VideoPane({
               </span>
             ) : null}
           </div>
-          <p className="mt-0.5 truncate text-[10px] uppercase tracking-[0.14em] text-[color:var(--color-muted)]">
+          <p className="mt-0.5 hidden truncate text-[10px] uppercase tracking-[0.14em] text-[color:var(--color-muted)] @sm:block">
             {video
               ? `${pane.label} / ${video.clubTag} / ${video.orientation}`
               : isComparisonPane
@@ -582,7 +582,7 @@ export function VideoPane({
         </div>
 
         <div className="flex min-w-fit items-center gap-2">
-          <div className="hidden items-center gap-0.5 border border-[color:var(--color-border)] bg-black/25 p-0.5 sm:flex">
+          <div className="hidden items-center gap-0.5 border border-[color:var(--color-border)] bg-black/25 p-0.5 @sm:flex">
             <button
               type="button"
               onClick={() => updateZoom(zoom - 0.25)}
@@ -647,10 +647,13 @@ export function VideoPane({
             ) : null}
           </div>
 
-          <label className="border border-[color:var(--color-border)] px-2 py-1.5 text-xs text-white hover:border-[color:var(--color-accent)]">
+          <label
+            className="cursor-pointer border border-[color:var(--color-border)] px-2 py-1.5 text-xs text-white hover:border-[color:var(--color-accent)]"
+            title="Upload a clip into this pane"
+          >
             <span className="inline-flex items-center gap-2">
               <UploadCloud className="size-4" />
-              <span className="hidden sm:inline">Upload</span>
+              <span className="hidden @2xl:inline">Upload</span>
             </span>
             <input
               type="file"
@@ -669,7 +672,8 @@ export function VideoPane({
           <select
             value={pane.videoId ?? ""}
             onChange={(event) => onSelectVideo(pane.id, event.target.value)}
-            className="max-w-40 border border-[color:var(--color-border)] bg-[#0b0c0e] px-2 py-1.5 text-xs text-white outline-none sm:max-w-52"
+            className="max-w-36 border border-[color:var(--color-border)] bg-[#0b0c0e] px-2 py-1.5 text-xs text-white outline-none @lg:max-w-52"
+            aria-label="Clip in this pane"
           >
             <option value="">Choose saved swing</option>
             <optgroup label="My swings">
@@ -696,7 +700,7 @@ export function VideoPane({
         <div
           ref={mediaViewportRef}
           className={cn(
-            "relative min-h-[240px] w-full flex-1 touch-none overflow-hidden bg-black",
+            "relative min-h-[120px] w-full flex-1 touch-none overflow-hidden bg-black",
             canPan ? "cursor-grab active:cursor-grabbing" : null,
           )}
           onWheel={handleWheel}
@@ -832,11 +836,11 @@ export function VideoPane({
         </div>
 
         <div className="shrink-0 border-t border-[color:var(--color-border)] bg-[#141517] px-2.5 py-1.5">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 @md:flex-nowrap">
             <button
               type="button"
               onClick={togglePlayback}
-              className="flex size-8 shrink-0 items-center justify-center bg-[color:var(--color-accent)] text-[color:var(--color-ink)]"
+              className="flex size-8 shrink-0 items-center justify-center bg-[color:var(--color-accent)] text-[color:var(--color-ink)] pointer-coarse:size-10"
               aria-label={isPlaying ? "Pause" : "Play"}
             >
               {isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
@@ -845,7 +849,7 @@ export function VideoPane({
             <button
               type="button"
               onClick={() => stepBy(-1)}
-              className="flex size-8 shrink-0 items-center justify-center border border-[color:var(--color-border)] text-white hover:border-white/25"
+              className="flex size-8 shrink-0 items-center justify-center border border-[color:var(--color-border)] text-white hover:border-white/25 pointer-coarse:size-10"
               aria-label="Step back one frame"
             >
               <SkipBack className="size-4" />
@@ -854,7 +858,7 @@ export function VideoPane({
             <button
               type="button"
               onClick={() => stepBy(1)}
-              className="flex size-8 shrink-0 items-center justify-center border border-[color:var(--color-border)] text-white hover:border-white/25"
+              className="flex size-8 shrink-0 items-center justify-center border border-[color:var(--color-border)] text-white hover:border-white/25 pointer-coarse:size-10"
               aria-label="Step forward one frame"
             >
               <SkipForward className="size-4" />
@@ -866,7 +870,7 @@ export function VideoPane({
               disabled={!video}
               aria-pressed={Boolean(loop)}
               className={cn(
-                "flex size-8 shrink-0 items-center justify-center border disabled:opacity-40",
+                "flex size-8 shrink-0 items-center justify-center border disabled:opacity-40 pointer-coarse:size-10",
                 loop
                   ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/14 text-white"
                   : "border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:border-white/25 hover:text-white",
@@ -891,7 +895,7 @@ export function VideoPane({
               <select
                 value={video.fps ?? DEFAULT_FPS}
                 onChange={(event) => onSetVideoFps(video.id, Number(event.target.value), "manual")}
-                className="hidden h-8 border border-[color:var(--color-border)] bg-[#0b0c0e] px-1.5 font-mono text-xs text-white outline-none md:block"
+                className="hidden h-8 border border-[color:var(--color-border)] bg-[#0b0c0e] px-1.5 font-mono text-xs text-white outline-none @3xl:block"
                 aria-label="Clip frame rate"
                 title={
                   video.fpsSource === "detected"
@@ -910,7 +914,7 @@ export function VideoPane({
             <select
               value={pane.playbackRate}
               onChange={(event) => onChangeRate(pane.id, Number(event.target.value))}
-              className="h-8 border border-[color:var(--color-border)] bg-[#0b0c0e] px-2 font-mono text-xs text-white outline-none"
+              className="h-8 border border-[color:var(--color-border)] bg-[#0b0c0e] px-2 font-mono text-xs text-white outline-none pointer-coarse:h-10"
               aria-label="Playback speed"
             >
               {SPEED_OPTIONS.map((speed) => (
@@ -959,7 +963,8 @@ function PlaybackTransport({
 
   return (
     <>
-      <div className="min-w-0 flex-1 px-2">
+      {/* In a narrow pane the scrubber gets its own row so it stays usable. */}
+      <div className="order-last min-w-0 basis-full px-1 @md:order-none @md:flex-1 @md:basis-0 @md:px-2">
         <input
           type="range"
           min={0}
@@ -980,7 +985,7 @@ function PlaybackTransport({
         />
       </div>
 
-      <p className="hidden min-w-32 text-right font-mono text-xs text-[color:var(--color-muted)] sm:block">
+      <p className="hidden min-w-32 text-right font-mono text-xs text-[color:var(--color-muted)] @2xl:block">
         {formatTimecode(currentTime)} / {formatTimecode(duration)}
         <span className="ml-1.5 text-[10px] opacity-70">F{frameIndexAt(currentTime, fps)}</span>
       </p>

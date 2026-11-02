@@ -210,7 +210,10 @@ function WorkspaceView({
   const [redoStack, setRedoStack] = useState<Array<Record<PaneId, AnnotationObject[]>>>([]);
   const [syncGroup] = useState(() => new SyncGroup());
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  // Docked at xl and up; below that it's a drawer over the video, so start closed.
+  const [inspectorOpen, setInspectorOpen] = useState(
+    () => window.matchMedia("(min-width: 1280px)").matches,
+  );
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const capturesRef = useRef(new Map<PaneId, () => HTMLCanvasElement | null>());
   const registerCapture = useCallback(
@@ -783,7 +786,7 @@ function WorkspaceView({
 
 
   return (
-    <div className="flex h-screen min-h-[640px] flex-col overflow-hidden bg-[#07080a] text-white">
+    <div className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-[#07080a] text-white">
       <header className="flex h-11 shrink-0 items-center justify-between border-b border-[color:var(--color-border)] bg-[#101113] px-2.5">
         <div className="flex min-w-0 items-center gap-3">
           <Link
@@ -882,7 +885,7 @@ function WorkspaceView({
       ) : null}
 
       <div className="flex min-h-0 flex-1">
-        <div className="w-[52px] shrink-0">
+        <div className="w-[52px] shrink-0 pointer-coarse:w-[60px]">
           <AnalysisToolbar
             activeTool={activeTool}
             activeColor={activeColor}
@@ -924,7 +927,10 @@ function WorkspaceView({
           ) : null}
           <div
             className={`grid min-h-0 flex-1 ${
-              compareMode ? "gap-0 xl:grid-cols-2" : "grid-cols-1"
+              // Side by side in landscape (desktop, iPad landscape), stacked in portrait.
+              compareMode
+                ? "grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-1 landscape:grid-cols-2 landscape:grid-rows-1"
+                : "grid-cols-1"
             }`}
           >
             {visiblePanes.map((pane) => (
@@ -970,30 +976,38 @@ function WorkspaceView({
         </main>
 
         {inspectorOpen ? (
-          <div className="hidden w-[300px] shrink-0 xl:block">
-            <SessionSidebar
-              sessionTitle={session.title}
-              notes={session.notes}
-              syncEnabled={session.syncEnabled}
-              activePaneId={effectiveActivePaneId}
-              markers={[...markersByPane.primary, ...(compareMode ? markersByPane.secondary : [])]}
-              references={references}
-              lastSavedAt={lastSavedAt}
-              onNotesChange={(value) =>
-                setSession((current) => ({
-                  ...current,
-                  notes: value,
-                }))
-              }
-              onToggleSync={handleToggleSync}
-              onSave={handleManualSave}
-              onAddMarker={handleAddMarker}
-              onSeekMarker={handleSeekMarker}
-              onRenameMarker={handleRenameMarker}
-              onDeleteMarker={handleDeleteMarker}
-              onLoadReference={handleLoadReference}
+          <>
+            <div
+              className="fixed inset-0 z-30 bg-black/50 xl:hidden"
+              onClick={() => setInspectorOpen(false)}
+              aria-hidden="true"
             />
-          </div>
+            <div className="fixed inset-y-0 right-0 z-40 w-[300px] max-w-[85vw] shadow-2xl xl:static xl:z-auto xl:max-w-none xl:shrink-0 xl:shadow-none">
+              <SessionSidebar
+                onClose={() => setInspectorOpen(false)}
+                sessionTitle={session.title}
+                notes={session.notes}
+                syncEnabled={session.syncEnabled}
+                activePaneId={effectiveActivePaneId}
+                markers={[...markersByPane.primary, ...(compareMode ? markersByPane.secondary : [])]}
+                references={references}
+                lastSavedAt={lastSavedAt}
+                onNotesChange={(value) =>
+                  setSession((current) => ({
+                    ...current,
+                    notes: value,
+                  }))
+                }
+                onToggleSync={handleToggleSync}
+                onSave={handleManualSave}
+                onAddMarker={handleAddMarker}
+                onSeekMarker={handleSeekMarker}
+                onRenameMarker={handleRenameMarker}
+                onDeleteMarker={handleDeleteMarker}
+                onLoadReference={handleLoadReference}
+              />
+            </div>
+          </>
         ) : null}
       </div>
 
