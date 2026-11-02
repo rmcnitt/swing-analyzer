@@ -49,3 +49,6 @@ next-env.d.ts
 
 # generated from local public/pro-swings media (temporary until Phase 1 references)
 /lib/data/pro-swings.generated.ts
+
+# raw source clips for scripts/prepare-sample.sh (not committed)
+/raw-samples/
