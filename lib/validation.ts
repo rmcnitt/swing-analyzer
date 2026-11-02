@@ -123,6 +123,8 @@ export const sessionSchema = z.object({
       playbackRate: z.number(),
       currentTime: z.number().min(0),
       fitGolfer: z.boolean().optional(),
+      loop: z.object({ start: z.number().min(0), end: z.number().min(0) }).optional(),
+      loopEnabled: z.boolean().optional(),
     }),
   ),
   annotations: z.object({

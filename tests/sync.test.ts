@@ -273,6 +273,33 @@ describe("SyncGroup", () => {
     expect(secondary.currentTime).toBeCloseTo(0.55);
   });
 
+  it("wraps a looping leader and re-maps its follower", () => {
+    const { group, primary, secondary } = setup(true, 0.5);
+    group.setLoop("primary", { start: 1, end: 2 });
+
+    primary.currentTime = 3;
+    group.play("primary");
+    expect(primary.currentTime).toBe(1);
+    expect(secondary.currentTime).toBe(1.5);
+
+    group.onFrame("primary", 2.01);
+    expect(primary.currentTime).toBe(1);
+    expect(secondary.currentTime).toBe(1.5);
+    expect(primary.paused).toBe(false);
+  });
+
+  it("restarts a loop that runs to the clip end", () => {
+    const { group, primary } = setup(false);
+    group.setLoop("primary", { start: 0.5, end: 10 });
+
+    group.play("primary");
+    primary.pause();
+    group.onEnded("primary");
+
+    expect(primary.currentTime).toBe(0.5);
+    expect(primary.paused).toBe(false);
+  });
+
   it("resets nudged rates when sync is turned off", () => {
     const { group, secondary } = setup();
 

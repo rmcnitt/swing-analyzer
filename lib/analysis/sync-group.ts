@@ -1,6 +1,7 @@
 import { stepFrameTime } from "@/lib/analysis/frames";
+import { loopStartFor } from "@/lib/analysis/loop";
 import { followerCorrection, identityMapper, type TimeMapper } from "@/lib/analysis/sync";
-import type { PaneId } from "@/lib/types";
+import type { LoopRange, PaneId } from "@/lib/types";
 
 /** What the group needs from a pane's video element. */
 export interface SyncMedia {
@@ -34,6 +35,7 @@ export class SyncGroup {
   private members = new Map<PaneId, SyncMedia>();
   private enabled = false;
   private leaderId: PaneId | null = null;
+  private loops = new Map<PaneId, LoopRange>();
 
   constructor(private mapTime: TimeMapper = identityMapper) {}
 
@@ -67,6 +69,20 @@ export class SyncGroup {
     this.mapTime = mapper;
   }
 
+  /** Loop a pane's playback between in/out points (null to stop looping). */
+  setLoop(paneId: PaneId, loop: LoopRange | null) {
+    if (loop) {
+      this.loops.set(paneId, loop);
+    } else {
+      this.loops.delete(paneId);
+    }
+  }
+
+  /** A pane's loop applies when it plays on its own: as the leader, or with sync off. */
+  private activeLoop(paneId: PaneId) {
+    return paneId === this.leaderId || !this.enabled ? this.loops.get(paneId) : undefined;
+  }
+
   private followers(leaderId: PaneId) {
     if (!this.enabled) {
       return [];
@@ -96,6 +112,11 @@ export class SyncGroup {
     }
 
     this.leaderId = leaderId;
+    const loop = this.loops.get(leaderId);
+
+    if (loop && loopStartFor(loop, leader.currentTime) !== leader.currentTime) {
+      leader.seek(loop.start);
+    }
 
     for (const [id, follower] of this.followers(leaderId)) {
       const target = this.target(leaderId, id, follower, leader.currentTime);
@@ -182,6 +203,14 @@ export class SyncGroup {
 
   /** Call for every presented frame of a playing pane; only the leader's frames correct. */
   onFrame(paneId: PaneId, time: number) {
+    const loop = this.activeLoop(paneId);
+
+    if (loop && time >= loop.end) {
+      // Wrap to the in point; followers re-map from there.
+      this.seek(paneId, loop.start);
+      return;
+    }
+
     if (!this.enabled || paneId !== this.leaderId) {
       return;
     }
@@ -220,6 +249,16 @@ export class SyncGroup {
 
   /** The leader reached its end on its own; stop everything in place. */
   onEnded(paneId: PaneId) {
+    const loop = this.activeLoop(paneId);
+    const media = this.members.get(paneId);
+
+    // A loop that runs to the clip's end wraps here instead of on a frame.
+    if (loop && media) {
+      this.seek(paneId, loop.start);
+      media.play();
+      return;
+    }
+
     if (paneId === this.leaderId) {
       this.pause(paneId);
     }

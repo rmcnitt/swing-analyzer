@@ -18,6 +18,7 @@ import {
   Pause,
   Play,
   Plus,
+  Repeat,
   SkipBack,
   SkipForward,
   UploadCloud,
@@ -40,12 +41,14 @@ import { createTimeStore, type TimeStore } from "@/lib/video/time-store";
 import { PlaybackProblemNotice } from "@/components/analysis/playback-problem-notice";
 import { getContainedStageSize, getVideoAspectRatio } from "@/lib/video-layout";
 import { clampPan, fitFraming, MAX_ZOOM, MIN_ZOOM } from "@/lib/analysis/framing";
+import { defaultLoop } from "@/lib/analysis/loop";
 import { GolferBoxEditor } from "@/components/analysis/golfer-box-editor";
 import type {
   AnalysisPane,
   AnnotationObject,
   AnnotationTool,
   HexColor,
+  LoopRange,
   NormalizedRect,
   PaneId,
   SnapshotMarker,
@@ -320,6 +323,19 @@ export function VideoPane({
   };
 
   const stepBy = (frames: number) => syncGroup.step(pane.id, frames, video?.fps);
+
+  const loop = pane.loopEnabled && pane.loop ? pane.loop : undefined;
+
+  useEffect(() => {
+    syncGroup.setLoop(pane.id, loop ?? null);
+  }, [syncGroup, pane.id, loop]);
+
+  const toggleLoop = () => {
+    onUpdatePane(pane.id, {
+      loopEnabled: !pane.loopEnabled,
+      loop: pane.loop ?? defaultLoop(positions, duration || videoRef.current?.duration || 0),
+    });
+  };
 
   /** Saves the playhead into the session only when it comes to rest (not per frame). */
   const syncTimeFromElement = () => {
@@ -798,12 +814,31 @@ export function VideoPane({
               <SkipForward className="size-4" />
             </button>
 
+            <button
+              type="button"
+              onClick={toggleLoop}
+              disabled={!video}
+              aria-pressed={Boolean(loop)}
+              className={cn(
+                "flex size-8 shrink-0 items-center justify-center border disabled:opacity-40",
+                loop
+                  ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/14 text-white"
+                  : "border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:border-white/25 hover:text-white",
+              )}
+              aria-label={loop ? "Stop looping" : "Loop"}
+              title={loop ? "Stop looping (R)" : "Loop a range (R); drag the in/out handles or press [ and ]"}
+            >
+              <Repeat className="size-4" />
+            </button>
+
             <PlaybackTransport
               timeStore={timeStore}
               duration={duration}
               fps={video?.fps}
               markers={markers}
+              loop={loop}
               onSeek={seekTo}
+              onLoopChange={(next) => onUpdatePane(pane.id, { loop: next })}
             />
 
             {video ? (
@@ -862,13 +897,17 @@ function PlaybackTransport({
   duration,
   fps,
   markers,
+  loop,
   onSeek,
+  onLoopChange,
 }: {
   timeStore: TimeStore;
   duration: number;
   fps?: number;
   markers: SnapshotMarker[];
+  loop?: LoopRange;
   onSeek: (time: number) => void;
+  onLoopChange: (loop: LoopRange) => void;
 }) {
   const currentTime = useSyncExternalStore(timeStore.subscribe, timeStore.get, () => 0);
 
@@ -885,7 +924,14 @@ function PlaybackTransport({
           className="h-1.5 w-full cursor-pointer appearance-none bg-white/15 accent-[color:var(--color-accent)]"
           aria-label="Scrub video"
         />
-        <Timeline currentTime={currentTime} duration={duration} markers={markers} onSeek={onSeek} />
+        <Timeline
+          currentTime={currentTime}
+          duration={duration}
+          markers={markers}
+          loop={loop}
+          onSeek={onSeek}
+          onLoopChange={onLoopChange}
+        />
       </div>
 
       <p className="hidden min-w-32 text-right font-mono text-xs text-[color:var(--color-muted)] sm:block">

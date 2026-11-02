@@ -63,6 +63,12 @@ export interface VideoAsset {
   createdAt: string;
 }
 
+/** In/out points (seconds) for looped playback. */
+export interface LoopRange {
+  start: number;
+  end: number;
+}
+
 export interface AnalysisPane {
   id: PaneId;
   label: string;
@@ -72,6 +78,9 @@ export interface AnalysisPane {
   currentTime: number;
   /** Zoom to the clip's golfer box instead of manual zoom/pan. */
   fitGolfer?: boolean;
+  /** Kept when looping is switched off so it can be switched back on. */
+  loop?: LoopRange;
+  loopEnabled?: boolean;
 }
 
 export type AnnotationGeometry =

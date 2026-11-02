@@ -43,6 +43,7 @@ import type {
 import { createId, uniqueById } from "@/lib/utils";
 import { DEFAULT_FPS } from "@/lib/analysis/frames";
 import { DEFAULT_STROKE_WIDTH, STROKE_WIDTHS } from "@/lib/analysis/annotations";
+import { defaultLoop, setLoopPoint } from "@/lib/analysis/loop";
 import {
   isSwingPosition,
   paneMarkers,
@@ -618,6 +619,31 @@ function WorkspaceView({
     saveUiPreference("active-tool", tool);
   };
 
+  /** `[`/`]` set an in/out point at the current frame (turning looping on); R toggles it. */
+  const handleLoopShortcut = (paneId: PaneId, point: "start" | "end" | null) => {
+    const pane = session.panes.find((candidate) => candidate.id === paneId);
+    const media = syncGroup.get(paneId);
+    const mediaDuration = media?.duration ?? Infinity;
+    const duration = Number.isFinite(mediaDuration) ? mediaDuration : (getVideo(pane?.videoId)?.duration ?? 0);
+
+    if (!pane || !media || !duration) {
+      return;
+    }
+
+    if (point) {
+      updatePane(paneId, {
+        loop: setLoopPoint(pane.loopEnabled ? pane.loop : undefined, point, media.currentTime, duration),
+        loopEnabled: true,
+      });
+      return;
+    }
+
+    updatePane(paneId, {
+      loopEnabled: !pane.loopEnabled,
+      loop: pane.loop ?? defaultLoop(positionsByPane[paneId], duration),
+    });
+  };
+
   const runShortcut = (action: ShortcutAction) => {
     const paneId = effectiveActivePaneId;
 
@@ -645,6 +671,10 @@ function WorkspaceView({
         break;
       case "toggle-overlay":
         handleToggleOverlay();
+        break;
+      case "loop-point":
+      case "toggle-loop":
+        handleLoopShortcut(paneId, action.type === "loop-point" ? action.point : null);
         break;
       case "toggle-help":
         setShortcutsOpen((open) => !open);

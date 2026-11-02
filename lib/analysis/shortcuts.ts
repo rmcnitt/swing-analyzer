@@ -24,6 +24,8 @@ export type ShortcutAction =
   | { type: "redo" }
   | { type: "delete-selected" }
   | { type: "toggle-overlay" }
+  | { type: "loop-point"; point: "start" | "end" }
+  | { type: "toggle-loop" }
   | { type: "toggle-help" }
   | { type: "escape" };
 
@@ -72,6 +74,10 @@ export function resolveShortcut({ key, shiftKey, metaKey, ctrlKey, altKey }: Key
       return { type: "delete-selected" };
     case "?":
       return { type: "toggle-help" };
+    case "[":
+      return { type: "loop-point", point: "start" };
+    case "]":
+      return { type: "loop-point", point: "end" };
     case "Escape":
       return { type: "escape" };
   }
@@ -87,6 +93,10 @@ export function resolveShortcut({ key, shiftKey, metaKey, ctrlKey, altKey }: Key
 
   if (lower === "o") {
     return { type: "toggle-overlay" };
+  }
+
+  if (lower === "r") {
+    return { type: "toggle-loop" };
   }
 
   const tool = toolsByKey.get(lower);
@@ -123,6 +133,8 @@ export const SHORTCUT_GROUPS: Array<{ title: string; items: Array<[keys: string,
       ["← / →", "Previous / next frame"],
       ["⇧ ← / ⇧ →", "Back / forward 10 frames"],
       ["1 – 5", `Speed ${SPEED_OPTIONS.map((rate) => `${rate}x`).join(", ")}`],
+      ["[ / ]", "Loop in / out at current frame"],
+      ["R", "Loop on / off"],
     ],
   },
   {
