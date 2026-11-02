@@ -31,15 +31,15 @@ Baseline health: lint clean, 8/8 vitest pass, `tsc --noEmit` 1 error (tests/anno
    - Simplify `lib/data/repository.ts` to a thin seed-data module (no fake async server repo).
 6. Fix tsc error; add `"typecheck": "tsc --noEmit"`; GitHub Actions CI running lint + typecheck + test + build.
 
-## Phase 1 — Correctness bugs  _(in progress; data/storage items done 2026-11-02)_
+## Phase 1 — Correctness bugs  _(done 2026-11-02; awaiting browser review)_
 - [x] **Silent session loss:** clamp normalized geometry at creation (`lib/analysis/annotations.ts`), relax circle radius bound in `lib/validation.ts`, and on parse failure drop only invalid annotations rather than the whole session (`lib/storage/session-storage.ts`).
 - [x] **References model:** add `sourceType: "reference"` (replacing "pro"); import flow gets a "Save as reference" toggle; Library tabs become My swings / References; compare-pane picker groups both. "Add to compare" passes `?compare=true&ref=<videoId>` and the workspace loads it into the secondary pane (fixes current bug where the chosen pro is ignored).
 - [x] **Hydration:** stop reading localStorage in `useState` initializers (analysis-workspace.tsx:128, library-browser.tsx:33).
 - [x] **Object URL leaks:** revoke URLs from `loadStoredVideos` on unmount/replacement.
-- [ ] **Drawing input:** Konva pointer events (touch/pen), ignore zero-length shapes, map pointer through the zoom/pan transform so drawing works while zoomed.
-- [ ] **Frame accuracy:** detect real fps via `requestVideoFrameCallback` on import (fallback to user-set fps); step by true frame duration.
-- [ ] **Playback loop:** drive time display/scrubber from rVFC + refs; keep per-tick `currentTime` out of persisted session state (stops full re-render + autosave churn); replace seek-chasing sync with leader-driven lockstep.
-- [ ] **Unplayable video:** catch decode errors (e.g. HEVC .mov in Chrome) and show a clear message with guidance.
+- [x] **Drawing input:** Konva pointer events (touch/pen), ignore zero-length shapes, map pointer through the zoom/pan transform so drawing works while zoomed.
+- [x] **Frame accuracy:** detect real fps via `requestVideoFrameCallback` on import (fallback to user-set fps); step by true frame duration.
+- [x] **Playback loop:** drive time display/scrubber from rVFC + refs; keep per-tick `currentTime` out of persisted session state (stops full re-render + autosave churn); replace seek-chasing sync with leader-driven lockstep.
+- [x] **Unplayable video:** catch decode errors (e.g. HEVC .mov in Chrome) and show a clear message with guidance.
 - [x] **Delete / rename** sessions and videos from Hub and Library (IndexedDB blobs included); show storage usage via `navigator.storage.estimate()` and request persistence (`navigator.storage.persist()`).
 
 ## Phase 2 — Core analysis UX (V1 / SwingCatalyst parity)
