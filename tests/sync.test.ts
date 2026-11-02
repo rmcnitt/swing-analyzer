@@ -262,6 +262,17 @@ describe("SyncGroup", () => {
     expect(secondary.multiplier).toBeCloseTo(0.8);
   });
 
+  it("steps the pane by whole frames and pauses it first", () => {
+    const { group, primary, secondary } = setup(true, 0.5);
+
+    group.play("primary");
+    group.step("primary", 2, 50);
+
+    expect(primary.paused).toBe(true);
+    expect(primary.currentTime).toBeCloseTo(0.05);
+    expect(secondary.currentTime).toBeCloseTo(0.55);
+  });
+
   it("resets nudged rates when sync is turned off", () => {
     const { group, secondary } = setup();
 

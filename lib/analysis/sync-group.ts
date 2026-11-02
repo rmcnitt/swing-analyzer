@@ -1,3 +1,4 @@
+import { stepFrameTime } from "@/lib/analysis/frames";
 import { followerCorrection, identityMapper, type TimeMapper } from "@/lib/analysis/sync";
 import type { PaneId } from "@/lib/types";
 
@@ -152,6 +153,31 @@ export class SyncGroup {
     for (const [id, follower] of this.followers(leaderId)) {
       follower.seek(this.target(leaderId, id, follower, time).time);
     }
+  }
+
+  togglePlay(paneId: PaneId) {
+    const media = this.members.get(paneId);
+
+    if (media?.paused) {
+      this.play(paneId);
+    } else if (media) {
+      this.pause(paneId);
+    }
+  }
+
+  /** Pauses (if playing) and moves `frames` frames from the pane's current frame. */
+  step(paneId: PaneId, frames: number, fps: number | undefined) {
+    const media = this.members.get(paneId);
+
+    if (!media) {
+      return;
+    }
+
+    if (!media.paused) {
+      this.pause(paneId);
+    }
+
+    this.seek(paneId, stepFrameTime(media.currentTime, fps, frames, media.duration));
   }
 
   /** Call for every presented frame of a playing pane; only the leader's frames correct. */

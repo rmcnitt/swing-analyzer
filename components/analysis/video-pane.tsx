@@ -28,8 +28,8 @@ import {
   frameDuration,
   frameIndexAt,
   frameRateChoices,
-  stepFrameTime,
 } from "@/lib/analysis/frames";
+import { SPEED_OPTIONS } from "@/lib/analysis/shortcuts";
 import type { SyncGroup, SyncMedia } from "@/lib/analysis/sync-group";
 import { detectVideoFps } from "@/lib/video/media";
 import { classifyMediaError, type PlaybackProblem } from "@/lib/video/playback-errors";
@@ -84,7 +84,6 @@ interface VideoPaneProps {
   onMarkPosition: (paneId: PaneId, label: string, time: number) => void;
 }
 
-const speedOptions = [0.1, 0.25, 0.5, 0.75, 1];
 
 // Browsers reject playback rates outside roughly this range (Chrome throws below 1/16).
 const MIN_ELEMENT_RATE = 0.0625;
@@ -304,37 +303,13 @@ export function VideoPane({
     });
   }, [video?.id, video?.title]);
 
-  const togglePlayback = () => {
-    const element = videoRef.current;
-
-    if (!element) {
-      return;
-    }
-
-    if (element.paused) {
-      syncGroup.play(pane.id);
-    } else {
-      syncGroup.pause(pane.id);
-    }
-  };
+  const togglePlayback = () => syncGroup.togglePlay(pane.id);
 
   const seekTo = (time: number) => {
     syncGroup.seek(pane.id, time);
   };
 
-  const stepBy = (direction: -1 | 1) => {
-    const element = videoRef.current;
-
-    if (!element) {
-      return;
-    }
-
-    if (!element.paused) {
-      syncGroup.pause(pane.id);
-    }
-
-    seekTo(stepFrameTime(element.currentTime, video?.fps, direction, duration || element.duration || 0));
-  };
+  const stepBy = (frames: number) => syncGroup.step(pane.id, frames, video?.fps);
 
   /** Saves the playhead into the session only when it comes to rest (not per frame). */
   const syncTimeFromElement = () => {
@@ -779,7 +754,7 @@ export function VideoPane({
               className="h-8 border border-[color:var(--color-border)] bg-[#0b0c0e] px-2 font-mono text-xs text-white outline-none"
               aria-label="Playback speed"
             >
-              {speedOptions.map((speed) => (
+              {SPEED_OPTIONS.map((speed) => (
                 <option key={speed} value={speed}>
                   {speed}x
                 </option>

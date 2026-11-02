@@ -15,6 +15,7 @@ import {
   Square,
   Trash2,
 } from "lucide-react";
+import { TOOL_HOTKEYS } from "@/lib/analysis/shortcuts";
 import type { AnnotationTool, HexColor } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -79,7 +80,7 @@ export function AnalysisToolbar({
               key={tool.id}
               type="button"
               onClick={() => onToolChange(tool.id)}
-              title={tool.label}
+              title={`${tool.label} (${TOOL_HOTKEYS[tool.id]})`}
               className={cn(
                 "flex size-9 items-center justify-center border text-[color:var(--color-muted)] outline-none transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white",
                 activeTool === tool.id
@@ -119,7 +120,7 @@ export function AnalysisToolbar({
         <button
           type="button"
           onClick={onUndo}
-          title="Undo"
+          title="Undo (⌘Z)"
           className="flex size-9 items-center justify-center border border-transparent text-[color:var(--color-muted)] hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
           aria-label="Undo"
         >
@@ -128,7 +129,7 @@ export function AnalysisToolbar({
         <button
           type="button"
           onClick={onRedo}
-          title="Redo"
+          title="Redo (⇧⌘Z)"
           className="flex size-9 items-center justify-center border border-transparent text-[color:var(--color-muted)] hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
           aria-label="Redo"
         >
@@ -138,7 +139,7 @@ export function AnalysisToolbar({
           type="button"
           onClick={onDeleteSelected}
           disabled={!hasSelectedAnnotation}
-          title={hasSelectedAnnotation ? "Delete selected shape" : "Select a shape to delete"}
+          title={hasSelectedAnnotation ? "Delete selected shape (Delete)" : "Select a shape to delete"}
           className={cn(
             "flex size-9 items-center justify-center border border-transparent text-[color:var(--color-muted)] hover:border-white/20 hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-transparent disabled:hover:bg-transparent disabled:hover:text-[color:var(--color-muted)]",
             hasSelectedAnnotation ? "border-[color:var(--color-accent)]/50" : null,
@@ -159,7 +160,7 @@ export function AnalysisToolbar({
         <button
           type="button"
           onClick={onToggleOverlay}
-          title={overlayVisible ? "Hide overlay" : "Show overlay"}
+          title={overlayVisible ? "Hide drawings (O)" : "Show drawings (O)"}
           className={cn(
             "flex size-9 items-center justify-center border hover:border-white/20 hover:bg-white/[0.06] hover:text-white",
             overlayVisible

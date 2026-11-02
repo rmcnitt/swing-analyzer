@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useState } from "react";
 import { startTransition } from "react";
 import {
   Columns2,
+  Keyboard,
   LibraryBig,
   PanelRightClose,
   PanelRightOpen,
@@ -15,6 +16,7 @@ import { AnalysisToolbar } from "@/components/analysis/analysis-toolbar";
 import { ComparePositionBar } from "@/components/analysis/compare-position-bar";
 import { PlaybackProblemNotice } from "@/components/analysis/playback-problem-notice";
 import { SessionSidebar } from "@/components/analysis/session-sidebar";
+import { ShortcutsDialog } from "@/components/analysis/shortcuts-dialog";
 import { VideoPane } from "@/components/analysis/video-pane";
 import {
   ensureLocalLibrarySeeded,
@@ -46,6 +48,7 @@ import {
   positionTimes,
   upsertPositionMarker,
 } from "@/lib/analysis/positions";
+import { isTypingTarget, resolveShortcut, type ShortcutAction } from "@/lib/analysis/shortcuts";
 import { createCheckpointMapper, matchCheckpoints } from "@/lib/analysis/sync";
 import { SyncGroup } from "@/lib/analysis/sync-group";
 import type { PlaybackProblem } from "@/lib/video/playback-errors";
@@ -198,6 +201,7 @@ function WorkspaceView({
   const [syncGroup] = useState(() => new SyncGroup());
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [uploadProblem, setUploadProblem] = useState<{
     problem: PlaybackProblem;
     fileName: string;
@@ -263,6 +267,9 @@ function WorkspaceView({
     ...video,
     ...videoMetadataById[video.id],
   }));
+  const allVideos = videos;
+  const references = allVideos.filter((video) => video.sourceType === "reference");
+  const getVideo = (videoId?: string) => allVideos.find((video) => video.id === videoId);
   const activePane =
     session.panes.find((pane) => pane.id === effectiveActivePaneId) ?? session.panes[0];
   const overlayVisible = activePane?.overlayVisible ?? true;
@@ -570,6 +577,74 @@ function WorkspaceView({
     targets.forEach((id) => updatePane(id, { playbackRate: rate }));
   };
 
+  const handleToolChange = (tool: AnnotationTool) => {
+    setActiveTool(tool);
+    saveUiPreference("active-tool", tool);
+  };
+
+  const runShortcut = (action: ShortcutAction) => {
+    const paneId = effectiveActivePaneId;
+
+    switch (action.type) {
+      case "toggle-play":
+        syncGroup.togglePlay(paneId);
+        break;
+      case "step":
+        syncGroup.step(paneId, action.frames, getVideo(activePane?.videoId)?.fps);
+        break;
+      case "speed":
+        handleChangeRate(paneId, action.rate);
+        break;
+      case "tool":
+        handleToolChange(action.tool);
+        break;
+      case "undo":
+        handleUndo();
+        break;
+      case "redo":
+        handleRedo();
+        break;
+      case "delete-selected":
+        handleDeleteSelected();
+        break;
+      case "toggle-overlay":
+        handleToggleOverlay();
+        break;
+      case "toggle-help":
+        setShortcutsOpen((open) => !open);
+        break;
+      case "escape":
+        if (shortcutsOpen) {
+          setShortcutsOpen(false);
+        } else {
+          setSelectedAnnotationByPane((current) => ({ ...current, [paneId]: null }));
+        }
+        break;
+    }
+  };
+
+  const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    if (event.defaultPrevented || isTypingTarget(event.target)) {
+      return;
+    }
+
+    const action = resolveShortcut(event);
+
+    // While the shortcut list is open, only keys that close it apply.
+    if (!action || (shortcutsOpen && action.type !== "toggle-help" && action.type !== "escape")) {
+      return;
+    }
+
+    // Also stops Space from clicking a focused button and arrows from moving a focused slider.
+    event.preventDefault();
+    runShortcut(action);
+  });
+
+  useEffect(() => {
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const handleSetCompareMode = (nextCompareMode: boolean) => {
     const params = new URLSearchParams(searchParams.toString());
 
@@ -587,9 +662,6 @@ function WorkspaceView({
     }
   };
 
-  const allVideos = videos;
-  const references = allVideos.filter((video) => video.sourceType === "reference");
-  const getVideo = (videoId?: string) => allVideos.find((video) => video.id === videoId);
   const visiblePanes = compareMode
     ? session.panes
     : session.panes.filter((pane) => pane.id === "primary");
@@ -652,6 +724,15 @@ function WorkspaceView({
           </button>
           <button
             type="button"
+            onClick={() => setShortcutsOpen(true)}
+            className="hidden size-8 items-center justify-center border border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:border-white/20 hover:text-white md:flex"
+            aria-label="Keyboard shortcuts"
+            title="Keyboard shortcuts (?)"
+          >
+            <Keyboard className="size-4" />
+          </button>
+          <button
+            type="button"
             onClick={() => setInspectorOpen((current) => !current)}
             className="flex size-8 items-center justify-center border border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:border-white/20 hover:text-white"
             aria-label={inspectorOpen ? "Hide inspector" : "Show inspector"}
@@ -682,10 +763,7 @@ function WorkspaceView({
             activeColor={activeColor}
             overlayVisible={overlayVisible}
             hasSelectedAnnotation={Boolean(selectedAnnotationId)}
-            onToolChange={(tool) => {
-              setActiveTool(tool);
-              saveUiPreference("active-tool", tool);
-            }}
+            onToolChange={handleToolChange}
             onColorChange={(color) => {
               setActiveColor(color);
               saveUiPreference("active-color", color);
@@ -779,6 +857,8 @@ function WorkspaceView({
           </div>
         ) : null}
       </div>
+
+      {shortcutsOpen ? <ShortcutsDialog onClose={() => setShortcutsOpen(false)} /> : null}
     </div>
   );
 }
