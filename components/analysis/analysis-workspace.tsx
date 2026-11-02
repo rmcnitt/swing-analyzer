@@ -15,14 +15,15 @@ import { AnalysisToolbar } from "@/components/analysis/analysis-toolbar";
 import { SessionSidebar } from "@/components/analysis/session-sidebar";
 import { VideoPane } from "@/components/analysis/video-pane";
 import {
+  ensureLocalLibrarySeeded,
   loadStoredSession,
-  loadStoredVideos,
   loadUiPreference,
   saveStoredSession,
   saveStoredVideo,
   saveUiPreference,
   updateStoredVideoMetadata,
 } from "@/lib/storage/session-storage";
+import { useStoredVideos } from "@/lib/storage/use-stored-videos";
 import type {
   AnalysisPane,
   AnalysisSession,
@@ -60,21 +61,23 @@ export function AnalysisWorkspace({ sessionId, seedSession, ...rest }: AnalysisW
   useEffect(() => {
     let cancelled = false;
 
-    void loadStoredSession(sessionId).then((result) => {
-      if (cancelled) {
-        return;
-      }
+    void ensureLocalLibrarySeeded()
+      .then(() => loadStoredSession(sessionId))
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
 
-      const lastOpenedAt = new Date().toISOString();
+        const lastOpenedAt = new Date().toISOString();
 
-      if (result.status === "found") {
-        setLoadState({ status: "ready", session: { ...result.session, lastOpenedAt } });
-      } else if (result.status === "missing" && seedSession) {
-        setLoadState({ status: "ready", session: { ...seedSession, lastOpenedAt } });
-      } else {
-        setLoadState({ status: result.status === "corrupt" ? "corrupt" : "missing" });
-      }
-    });
+        if (result.status === "found") {
+          setLoadState({ status: "ready", session: { ...result.session, lastOpenedAt } });
+        } else if (result.status === "missing" && seedSession) {
+          setLoadState({ status: "ready", session: { ...seedSession, lastOpenedAt } });
+        } else {
+          setLoadState({ status: result.status === "corrupt" ? "corrupt" : "missing" });
+        }
+      });
 
     return () => {
       cancelled = true;
@@ -162,13 +165,19 @@ function WorkspaceView({
       ? loadReferenceIntoSecondary(initialSession, { id: initialReferenceId })
       : initialSession,
   );
-  const [uploadedVideos, setUploadedVideos] = useState<VideoAsset[]>([]);
+  const { videos: storedVideos, reload: reloadVideos } = useStoredVideos({ includeMedia: true });
   const [videoMetadataById, setVideoMetadataById] = useState<
     Record<string, VideoMetadataPatch>
   >({});
   const [activePaneId, setActivePaneId] = useState<PaneId>("primary");
-  const [activeTool, setActiveTool] = useState<AnnotationTool>("line");
-  const [activeColor, setActiveColor] = useState<HexColor>("#f97316");
+  // Safe to read localStorage during render: WorkspaceView only mounts on the client, after the
+  // session has loaded, so there is no server render to mismatch.
+  const [activeTool, setActiveTool] = useState<AnnotationTool>(
+    () => (loadUiPreference("active-tool") as AnnotationTool | null) ?? "line",
+  );
+  const [activeColor, setActiveColor] = useState<HexColor>(
+    () => loadUiPreference("active-color") ?? "#f97316",
+  );
   const [selectedAnnotationByPane, setSelectedAnnotationByPane] = useState<
     Partial<Record<PaneId, string | null>>
   >({});
@@ -181,23 +190,6 @@ function WorkspaceView({
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const compareMode = searchParams.get("compare") === "true";
   const effectiveActivePaneId = compareMode ? activePaneId : "primary";
-
-  useEffect(() => {
-    void Promise.resolve().then(() => {
-      const storedTool = loadUiPreference("active-tool") as AnnotationTool | null;
-      const storedColor = loadUiPreference("active-color");
-
-      if (storedTool) {
-        setActiveTool(storedTool);
-      }
-
-      if (storedColor) {
-        setActiveColor(storedColor);
-      }
-    });
-
-    void loadStoredVideos().then((storedVideos) => setUploadedVideos(storedVideos));
-  }, []);
 
   // Consume ?ref once so a reload or later navigation doesn't re-apply it.
   useEffect(() => {
@@ -220,7 +212,7 @@ function WorkspaceView({
     return () => window.clearTimeout(timeout);
   }, [session]);
 
-  const videos = uniqueById([...uploadedVideos, ...initialVideos]).map((video) => ({
+  const videos = uniqueById([...storedVideos, ...initialVideos]).map((video) => ({
     ...video,
     ...videoMetadataById[video.id],
   }));
@@ -343,14 +335,17 @@ function WorkspaceView({
   };
 
   const handleUploadVideo = async (paneId: PaneId, file: File) => {
-    const url = URL.createObjectURL(file);
-    const metadata = await readVideoMetadata(url);
+    // Temporary URL just for probing; the playable URL comes from IndexedDB via useStoredVideos.
+    const probeUrl = URL.createObjectURL(file);
+    const metadata = await readVideoMetadata(probeUrl);
+    const thumbnail = await createVideoThumbnail(probeUrl);
+    URL.revokeObjectURL(probeUrl);
     const asset: VideoAsset = {
       id: createId("upload"),
       title: file.name.replace(/\.[^.]+$/, ""),
-      url,
+      url: "",
       ownerId: "user-demo",
-      ownerName: "Robbie",
+      ownerName: "Local library",
       sourceType: "user",
       duration: metadata.duration,
       fps: 120,
@@ -362,10 +357,8 @@ function WorkspaceView({
       createdAt: new Date().toISOString(),
     };
 
-    setUploadedVideos((current) => [asset, ...current]);
-    const thumbnail = await createVideoThumbnail(url);
-
     await saveStoredVideo(asset, file, thumbnail);
+    await reloadVideos();
     handleSelectVideo(paneId, asset.id);
   };
 
@@ -445,14 +438,7 @@ function WorkspaceView({
   const handleRenameVideo = (videoId: string, title: string) => {
     const currentVideo = getVideo(videoId);
 
-    setUploadedVideos((current) => {
-      if (current.some((video) => video.id === videoId)) {
-        return current.map((video) => (video.id === videoId ? { ...video, title } : video));
-      }
-
-      return currentVideo ? [{ ...currentVideo, title }, ...current] : current;
-    });
-    void updateStoredVideoMetadata(videoId, { title });
+    void updateStoredVideoMetadata(videoId, { title }).then(reloadVideos);
 
     if (videoId === session.primaryVideoId) {
       setSession((current) => ({

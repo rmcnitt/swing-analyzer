@@ -57,6 +57,9 @@ export function createVideoThumbnail(url: string) {
 
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
       canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.72);
+      // Release the decoder so the caller can revoke the source URL.
+      video.removeAttribute("src");
+      video.load();
     };
 
     video.onloadeddata = () => {

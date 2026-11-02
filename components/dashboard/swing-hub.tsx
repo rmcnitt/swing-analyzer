@@ -11,21 +11,11 @@ import {
   UploadCloud,
   X,
 } from "lucide-react";
-import {
-  initializeLocalLibrary,
-  loadStoredSessions,
-  loadStoredVideos,
-  saveStoredSession,
-  saveStoredVideo,
-} from "@/lib/storage/session-storage";
+import { saveStoredSession, saveStoredVideo } from "@/lib/storage/session-storage";
+import { useLocalLibrary } from "@/lib/storage/use-stored-videos";
 import type { AnalysisSession, SwingOrientation, VideoAsset } from "@/lib/types";
-import { createId, formatDate, formatDuration, uniqueById } from "@/lib/utils";
+import { createId, formatDate, formatDuration } from "@/lib/utils";
 import { createVideoThumbnail, readVideoMetadata, type VideoFileMetadata } from "@/lib/video/media";
-
-interface SwingHubProps {
-  sessions: AnalysisSession[];
-  videos: VideoAsset[];
-}
 
 const clubOptions = [
   "Driver",
@@ -42,11 +32,10 @@ const clubOptions = [
   "Putter",
 ];
 
-export function SwingHub({ sessions, videos }: SwingHubProps) {
+export function SwingHub() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [storedSessions, setStoredSessions] = useState<AnalysisSession[]>([]);
-  const [storedVideos, setStoredVideos] = useState<VideoAsset[]>([]);
+  const library = useLocalLibrary();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<VideoFileMetadata | null>(null);
@@ -58,26 +47,20 @@ export function SwingHub({ sessions, videos }: SwingHubProps) {
   const [saveAsReference, setSaveAsReference] = useState(false);
   const [savedReferenceTitle, setSavedReferenceTitle] = useState<string | null>(null);
 
-  useEffect(() => {
-    void initializeLocalLibrary({
-      sessions: sessions,
-      videos,
-    }).then(async () => {
-      const [nextSessions, nextVideos] = await Promise.all([
-        loadStoredSessions(),
-        loadStoredVideos(),
-      ]);
+  // The import preview URL is revoked when replaced, cancelled, or on unmount.
+  const previewUrlRef = useRef<string | null>(null);
 
-      setStoredSessions(nextSessions);
-      setStoredVideos(nextVideos);
-    });
-  }, [sessions, videos]);
-
-  const allVideos = useMemo(() => uniqueById([...storedVideos, ...videos]), [storedVideos, videos]);
-  const allSessions = useMemo(
-    () => uniqueById([...storedSessions, ...sessions]),
-    [sessions, storedSessions],
+  useEffect(
+    () => () => {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+      }
+    },
+    [],
   );
+
+  const allVideos = library.videos;
+  const allSessions = library.sessions;
 
   const videoById = useMemo(
     () => new Map(allVideos.map((video) => [video.id, video])),
@@ -89,7 +72,12 @@ export function SwingHub({ sessions, videos }: SwingHubProps) {
   );
 
   const handleSelectFile = async (file: File) => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+    }
+
     const nextPreviewUrl = URL.createObjectURL(file);
+    previewUrlRef.current = nextPreviewUrl;
     const nextMetadata = await readVideoMetadata(nextPreviewUrl);
     const baseName = file.name.replace(/\.[^.]+$/, "");
 
@@ -101,8 +89,9 @@ export function SwingHub({ sessions, videos }: SwingHubProps) {
   };
 
   const handleCancelImport = () => {
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
     }
 
     setSelectedFile(null);
@@ -147,7 +136,7 @@ export function SwingHub({ sessions, videos }: SwingHubProps) {
 
     if (saveAsReference) {
       // References don't get their own session; they're loaded into a compare pane.
-      setStoredVideos(await loadStoredVideos());
+      await library.reload();
       handleCancelImport();
       setSavedReferenceTitle(video.title);
       return;

@@ -1,5 +1,6 @@
 "use client";
 
+import { sampleSessions, sampleVideos } from "@/lib/data/seed";
 import type { AnalysisSession, VideoAsset } from "@/lib/types";
 import { salvageSession } from "@/lib/storage/session-salvage";
 import { videoSchema } from "@/lib/validation";
@@ -11,7 +12,7 @@ const videoStoreName = "videos";
 const videoBlobStoreName = "video-blobs";
 const thumbnailBlobStoreName = "thumbnail-blobs";
 const metaStoreName = "meta";
-const seededKey = "seeded";
+const seededKey = "seeded-samples-v1";
 const preferencePrefix = "swing-analyzer-ui";
 
 type StoreName =
@@ -116,44 +117,53 @@ async function getBlob(storeName: StoreName, id: string) {
   return blob instanceof Blob ? blob : null;
 }
 
-function attachLocalUrls(
-  video: VideoAsset,
-  videoBlob: Blob | null,
-  thumbnailBlob: Blob | null,
-): VideoAsset {
-  return {
-    ...video,
-    url: videoBlob ? URL.createObjectURL(videoBlob) : video.url,
-    thumbnailUrl: thumbnailBlob ? URL.createObjectURL(thumbnailBlob) : video.thumbnailUrl,
-  };
+export function loadVideoBlob(videoId: string) {
+  return getBlob(videoBlobStoreName, videoId);
 }
 
-export async function initializeLocalLibrary(seed: {
-  sessions: AnalysisSession[];
-  videos: VideoAsset[];
-}) {
+export function loadThumbnailBlob(videoId: string) {
+  return getBlob(thumbnailBlobStoreName, videoId);
+}
+
+let seedPromise: Promise<void> | null = null;
+
+/**
+ * Writes the bundled sample sessions/videos into IndexedDB once per browser, so every page reads
+ * the same stored data. Samples the user later deletes stay deleted.
+ */
+export function ensureLocalLibrarySeeded() {
   if (typeof window === "undefined") {
-    return;
+    return Promise.resolve();
   }
 
-  const seeded = await runStore<string>(metaStoreName, "readonly", (store) =>
-    store.get(seededKey),
-  );
+  seedPromise ??= (async () => {
+    const seeded = await runStore<string>(metaStoreName, "readonly", (store) =>
+      store.get(seededKey),
+    );
 
-  if (seeded) {
-    return;
-  }
+    if (seeded) {
+      return;
+    }
 
-  const existingSessions = await getAllRecords<AnalysisSession>(sessionStoreName);
-
-  if (existingSessions.length === 0) {
-    await Promise.all([
-      ...seed.videos.map((video) => saveStoredVideo(video)),
-      ...seed.sessions.map((session) => saveStoredSession(session)),
+    const [sessionKeys, videoKeys] = await Promise.all([
+      runStore<IDBValidKey[]>(sessionStoreName, "readonly", (store) => store.getAllKeys()),
+      runStore<IDBValidKey[]>(videoStoreName, "readonly", (store) => store.getAllKeys()),
     ]);
-  }
+    const existingSessions = new Set(sessionKeys ?? []);
+    const existingVideos = new Set(videoKeys ?? []);
 
-  await putRecord(metaStoreName, "true", seededKey);
+    await Promise.all([
+      ...sampleVideos
+        .filter((video) => !existingVideos.has(video.id))
+        .map((video) => saveStoredVideo(video)),
+      ...sampleSessions
+        .filter((session) => !existingSessions.has(session.id))
+        .map((session) => saveStoredSession(session)),
+    ]);
+    await putRecord(metaStoreName, "true", seededKey);
+  })();
+
+  return seedPromise;
 }
 
 export type StoredSessionResult =
@@ -237,25 +247,19 @@ export async function updateStoredVideoMetadata(
   });
 }
 
-export async function loadStoredVideos(): Promise<VideoAsset[]> {
-  const records = await getAllRecords<VideoAsset>(videoStoreName);
-  const videos = await Promise.all(
-    records.map(async (record) => {
-      try {
-        const video = videoSchema.parse(record);
-        const [videoBlob, thumbnailBlob] = await Promise.all([
-          getBlob(videoBlobStoreName, video.id),
-          getBlob(thumbnailBlobStoreName, video.id),
-        ]);
+/**
+ * Video metadata only. `url`/`thumbnailUrl` are placeholders (indexeddb://) for blob-backed
+ * videos; resolve them with useStoredVideos, which manages the object URLs' lifetime.
+ */
+export async function loadStoredVideoRecords(): Promise<VideoAsset[]> {
+  const records = await getAllRecords<unknown>(videoStoreName);
 
-        return attachLocalUrls(video, videoBlob, thumbnailBlob);
-      } catch {
-        return null;
-      }
-    }),
-  );
-
-  return videos.filter((video): video is VideoAsset => Boolean(video));
+  return records
+    .map((record) => {
+      const parsed = videoSchema.safeParse(record);
+      return parsed.success ? parsed.data : null;
+    })
+    .filter((video): video is VideoAsset => Boolean(video));
 }
 
 export function loadUiPreference(key: string) {

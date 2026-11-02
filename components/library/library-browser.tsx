@@ -3,24 +3,14 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Columns2, FileVideo, Play, Search, Star } from "lucide-react";
-import {
-  initializeLocalLibrary,
-  loadStoredSessions,
-  loadStoredVideos,
-} from "@/lib/storage/session-storage";
+import { useLocalLibrary } from "@/lib/storage/use-stored-videos";
 import type { AnalysisSession, VideoAsset } from "@/lib/types";
-import { cn, formatDate, formatDuration, uniqueById } from "@/lib/utils";
-
-interface LibraryBrowserProps {
-  sessions: AnalysisSession[];
-  videos: VideoAsset[];
-}
+import { cn, formatDate, formatDuration } from "@/lib/utils";
 
 type LibraryTab = "my-swings" | "references" | "recent";
 
-export function LibraryBrowser({ sessions, videos }: LibraryBrowserProps) {
-  const [storedSessions, setStoredSessions] = useState<AnalysisSession[]>([]);
-  const [storedVideos, setStoredVideos] = useState<VideoAsset[]>([]);
+export function LibraryBrowser() {
+  const library = useLocalLibrary();
   const [activeTab, setActiveTab] = useState<LibraryTab>("my-swings");
   const [query, setQuery] = useState("");
 
@@ -31,26 +21,8 @@ export function LibraryBrowser({ sessions, videos }: LibraryBrowserProps) {
     }
   }, []);
 
-  useEffect(() => {
-    void initializeLocalLibrary({
-      sessions,
-      videos,
-    }).then(async () => {
-      const [nextSessions, nextVideos] = await Promise.all([
-        loadStoredSessions(),
-        loadStoredVideos(),
-      ]);
-
-      setStoredSessions(nextSessions);
-      setStoredVideos(nextVideos);
-    });
-  }, [sessions, videos]);
-
-  const allVideos = useMemo(() => uniqueById([...storedVideos, ...videos]), [storedVideos, videos]);
-  const allSessions = useMemo(
-    () => uniqueById([...storedSessions, ...sessions]),
-    [sessions, storedSessions],
-  );
+  const allVideos = library.videos;
+  const allSessions = library.sessions;
   const videoById = useMemo(
     () => new Map(allVideos.map((video) => [video.id, video])),
     [allVideos],
