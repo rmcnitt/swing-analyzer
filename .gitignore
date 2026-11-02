@@ -41,14 +41,10 @@ yarn-error.log*
 next-env.d.ts
 
 # local-only media (pro/tour clips are not redistributable; keep them on disk only)
-/public/pro-swings/*
-!/public/pro-swings/README.md
+/public/pro-swings/
 
 # third-party reference screenshots (kept locally for design reference only)
 /DesignIdeas/*.png
-
-# generated from local public/pro-swings media (temporary until Phase 1 references)
-/lib/data/pro-swings.generated.ts
 
 # raw source clips for scripts/prepare-sample.sh (not committed)
 /raw-samples/

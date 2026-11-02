@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { AnalysisWorkspace } from "@/components/analysis/analysis-workspace";
-import { proSwingReferences } from "@/lib/data/pro-swings";
 import { getSampleSession, sampleVideos } from "@/lib/data/seed";
 
 interface AnalysisPageProps {
@@ -23,7 +22,6 @@ export default async function AnalysisPage({ params }: AnalysisPageProps) {
         sessionId={sessionId}
         seedSession={session}
         initialVideos={sampleVideos}
-        proSwings={proSwingReferences}
       />
     </div>
   );

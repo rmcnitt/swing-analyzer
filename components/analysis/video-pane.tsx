@@ -314,7 +314,9 @@ export function VideoPane({
       });
     }
   };
-  const canRenameVideo = Boolean(video && video.sourceType !== "pro");
+  const canRenameVideo = Boolean(video);
+  const userVideos = videos.filter((option) => option.sourceType !== "reference");
+  const referenceVideos = videos.filter((option) => option.sourceType === "reference");
 
   const commitRename = () => {
     const nextTitle = draftTitle.trim();
@@ -542,11 +544,22 @@ export function VideoPane({
             className="max-w-40 border border-[color:var(--color-border)] bg-[#0b0c0e] px-2 py-1.5 text-xs text-white outline-none sm:max-w-52"
           >
             <option value="">Choose saved swing</option>
-            {videos.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.title}
-              </option>
-            ))}
+            <optgroup label="My swings">
+              {userVideos.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.title}
+                </option>
+              ))}
+            </optgroup>
+            {referenceVideos.length > 0 ? (
+              <optgroup label="References">
+                {referenceVideos.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.title}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
           </select>
         </div>
       </div>

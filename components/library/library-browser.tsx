@@ -3,34 +3,33 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Columns2, FileVideo, Play, Search, Star } from "lucide-react";
-import { ProSwingCard } from "@/components/library/pro-swing-card";
 import {
   initializeLocalLibrary,
   loadStoredSessions,
   loadStoredVideos,
 } from "@/lib/storage/session-storage";
-import {
-  applyProSwingOverrides,
-  loadProSwingOverrides,
-  saveProSwingOverride,
-} from "@/lib/storage/pro-swing-overrides";
-import type { AnalysisSession, ProSwingReference, VideoAsset } from "@/lib/types";
+import type { AnalysisSession, VideoAsset } from "@/lib/types";
 import { cn, formatDate, formatDuration, uniqueById } from "@/lib/utils";
 
 interface LibraryBrowserProps {
   sessions: AnalysisSession[];
   videos: VideoAsset[];
-  proSwings: ProSwingReference[];
 }
 
-type LibraryTab = "my-swings" | "pro" | "recent";
+type LibraryTab = "my-swings" | "references" | "recent";
 
-export function LibraryBrowser({ sessions, videos, proSwings }: LibraryBrowserProps) {
+export function LibraryBrowser({ sessions, videos }: LibraryBrowserProps) {
   const [storedSessions, setStoredSessions] = useState<AnalysisSession[]>([]);
   const [storedVideos, setStoredVideos] = useState<VideoAsset[]>([]);
   const [activeTab, setActiveTab] = useState<LibraryTab>("my-swings");
   const [query, setQuery] = useState("");
-  const [proSwingOverrides, setProSwingOverrides] = useState(loadProSwingOverrides);
+
+  useEffect(() => {
+    // Read ?tab= after mount (not during render) so the static page hydrates cleanly.
+    if (new URLSearchParams(window.location.search).get("tab") === "references") {
+      void Promise.resolve().then(() => setActiveTab("references"));
+    }
+  }, []);
 
   useEffect(() => {
     void initializeLocalLibrary({
@@ -57,20 +56,16 @@ export function LibraryBrowser({ sessions, videos, proSwings }: LibraryBrowserPr
     [allVideos],
   );
   const compareSessionId = allSessions[0]?.id ?? "sample-session";
-  const effectiveProSwings = useMemo(
-    () => applyProSwingOverrides(proSwings, proSwingOverrides),
-    [proSwings, proSwingOverrides],
-  );
   const normalizedQuery = query.trim().toLowerCase();
   const filteredSessions = allSessions.filter((session) => {
     const video = videoById.get(session.primaryVideoId);
     const haystack = `${session.title} ${video?.clubTag ?? ""} ${video?.orientation ?? ""}`.toLowerCase();
     return haystack.includes(normalizedQuery);
   });
-  const filteredProSwings = effectiveProSwings.filter((swing) => {
+  const filteredReferences = allVideos.filter((video) => {
     const haystack =
-      `${swing.player} ${swing.title} ${swing.club} ${swing.viewAngle} ${swing.tags.join(" ")}`.toLowerCase();
-    return haystack.includes(normalizedQuery);
+      `${video.title} ${video.ownerName} ${video.clubTag} ${video.orientation}`.toLowerCase();
+    return video.sourceType === "reference" && haystack.includes(normalizedQuery);
   });
   const recentSessions = [...filteredSessions].sort(
     (a, b) => new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime(),
@@ -101,7 +96,7 @@ export function LibraryBrowser({ sessions, videos, proSwings }: LibraryBrowserPr
         <div className="flex flex-wrap border-b border-[color:var(--color-border)]">
           {[
             { id: "my-swings" as const, label: "My swings", count: filteredSessions.length },
-            { id: "pro" as const, label: "Pro references", count: filteredProSwings.length },
+            { id: "references" as const, label: "References", count: filteredReferences.length },
             { id: "recent" as const, label: "Recently used", count: recentSessions.length },
           ].map((tab) => (
             <button
@@ -120,19 +115,8 @@ export function LibraryBrowser({ sessions, videos, proSwings }: LibraryBrowserPr
           ))}
         </div>
 
-        {activeTab === "pro" ? (
-          <div className="grid gap-2 p-2.5 xl:grid-cols-2">
-            {filteredProSwings.map((swing) => (
-              <ProSwingCard
-                key={swing.id}
-                swing={swing}
-                compareSessionId={compareSessionId}
-                onSaveOverride={(id, override) => {
-                  setProSwingOverrides(saveProSwingOverride(id, override));
-                }}
-              />
-            ))}
-          </div>
+        {activeTab === "references" ? (
+          <ReferenceTable references={filteredReferences} compareSessionId={compareSessionId} />
         ) : (
           <SessionTable
             sessions={activeTab === "recent" ? recentSessions : filteredSessions}
@@ -174,23 +158,7 @@ function SessionTable({
               className="grid gap-3 px-3 py-2.5 lg:grid-cols-[minmax(0,1fr)_110px_110px_90px_132px] lg:items-center"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <div className="relative flex aspect-video w-28 shrink-0 items-center justify-center overflow-hidden bg-black text-[color:var(--color-accent)]">
-                  {video?.thumbnailUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={video.thumbnailUrl}
-                      alt=""
-                      className="h-full w-full object-cover opacity-85"
-                    />
-                  ) : (
-                    <FileVideo className="size-5" />
-                  )}
-                  {video ? (
-                    <span className="absolute bottom-1 right-1 bg-black/75 px-1.5 py-0.5 font-mono text-[10px] text-white">
-                      {formatDuration(video.duration)}
-                    </span>
-                  ) : null}
-                </div>
+                <VideoThumbnail video={video} />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <h2 className="truncate text-sm font-semibold text-white">{session.title}</h2>
@@ -229,6 +197,79 @@ function SessionTable({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function ReferenceTable({
+  references,
+  compareSessionId,
+}: {
+  references: VideoAsset[];
+  compareSessionId: string;
+}) {
+  if (references.length === 0) {
+    return (
+      <p className="px-3 py-6 text-sm text-[color:var(--color-muted)]">
+        No references yet. Import a clip from the{" "}
+        <Link href="/" className="text-[color:var(--color-accent)] underline">
+          home screen
+        </Link>{" "}
+        and turn on &ldquo;Save as reference&rdquo; to compare your swing against it.
+      </p>
+    );
+  }
+
+  return (
+    <div className="divide-y divide-[color:var(--color-border)]">
+      {references.map((video) => (
+        <article
+          key={video.id}
+          className="grid gap-3 px-3 py-2.5 lg:grid-cols-[minmax(0,1fr)_110px_110px_90px_132px] lg:items-center"
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <VideoThumbnail video={video} />
+            <div className="min-w-0">
+              <h2 className="truncate text-sm font-semibold text-white">{video.title}</h2>
+              <p className="mt-1 truncate text-xs text-[color:var(--color-muted)]">
+                Added {formatDate(video.createdAt)}
+              </p>
+            </div>
+          </div>
+          <p className="text-sm text-[color:var(--color-muted)]">{video.clubTag}</p>
+          <p className="text-sm text-[color:var(--color-muted)]">
+            {video.orientation === "down-the-line" ? "Down line" : "Face-on"}
+          </p>
+          <p className="font-mono text-xs text-[color:var(--color-muted)]">{video.fps ?? 60} fps</p>
+          <div className="flex justify-start gap-2 lg:justify-end">
+            <Link
+              href={`/analysis/${compareSessionId}?compare=true&ref=${encodeURIComponent(video.id)}`}
+              className="flex h-8 items-center gap-1.5 bg-[color:var(--color-accent)] px-2.5 text-xs font-semibold text-[color:var(--color-ink)]"
+            >
+              <Columns2 className="size-3.5" />
+              Add to compare
+            </Link>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function VideoThumbnail({ video }: { video?: VideoAsset }) {
+  return (
+    <div className="relative flex aspect-video w-28 shrink-0 items-center justify-center overflow-hidden bg-black text-[color:var(--color-accent)]">
+      {video?.thumbnailUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={video.thumbnailUrl} alt="" className="h-full w-full object-cover opacity-85" />
+      ) : (
+        <FileVideo className="size-5" />
+      )}
+      {video ? (
+        <span className="absolute bottom-1 right-1 bg-black/75 px-1.5 py-0.5 font-mono text-[10px] text-white">
+          {formatDuration(video.duration)}
+        </span>
+      ) : null}
     </div>
   );
 }

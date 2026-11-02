@@ -3,13 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "pro-swings:generate": "node scripts/generate-pro-swings-manifest.mjs",
-    "dev": "npm run pro-swings:generate && next dev",
+    "dev": "next dev",
     "local": "./scripts/dev-local.sh",
-    "build": "npm run pro-swings:generate && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "pretypecheck": "npm run pro-swings:generate",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"

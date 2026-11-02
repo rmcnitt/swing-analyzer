@@ -10,7 +10,10 @@ export const videoSchema = z.object({
   height: z.number().optional(),
   ownerId: z.string(),
   ownerName: z.string(),
-  sourceType: z.enum(["user", "pro", "local"]),
+  // "pro" and "local" are legacy values from before user-imported references.
+  sourceType: z
+    .enum(["user", "reference", "pro", "local"])
+    .transform((value) => (value === "pro" ? "reference" : value === "local" ? "user" : value)),
   duration: z.number(),
   fps: z.number().optional(),
   orientation: z.enum(["face-on", "down-the-line"]),
@@ -115,5 +118,4 @@ export const sessionSchema = z.object({
     secondary: z.array(annotationSchema),
   }),
   snapshotMarkers: z.array(markerSchema),
-  selectedProSwingId: z.string().optional(),
 });

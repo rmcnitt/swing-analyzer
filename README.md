@@ -1,6 +1,6 @@
 # Swing Analyzer
 
-Swing Analyzer is a Next.js MVP for reviewing golf swing video with side-by-side comparison, drawing tools, saved study sessions, and a starter pro reference library.
+Swing Analyzer is a Next.js MVP for reviewing golf swing video with side-by-side comparison, drawing tools, saved study sessions, and a library of reference clips you import yourself.
 
 ## Stack
 
@@ -19,7 +19,7 @@ Swing Analyzer is a Next.js MVP for reviewing golf swing video with side-by-side
 - Drawing tools: line, arrow, rectangle, circle, angle, and freehand
 - Side-by-side comparison with sync toggle
 - Local autosave for sessions (IndexedDB)
-- Pro swing library screen
+- Library with your swings and imported reference clips ("Add to compare")
 
 ## Local development
 

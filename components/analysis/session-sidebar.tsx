@@ -12,7 +12,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import type { PaneId, ProSwingReference, SnapshotMarker } from "@/lib/types";
+import type { PaneId, SnapshotMarker, VideoAsset } from "@/lib/types";
 import { cn, formatDuration } from "@/lib/utils";
 
 interface SessionSidebarProps {
@@ -21,7 +21,7 @@ interface SessionSidebarProps {
   syncEnabled: boolean;
   activePaneId: PaneId;
   markers: SnapshotMarker[];
-  proSwings: ProSwingReference[];
+  references: VideoAsset[];
   lastSavedAt: string | null;
   onNotesChange: (value: string) => void;
   onToggleSync: () => void;
@@ -30,7 +30,7 @@ interface SessionSidebarProps {
   onSeekMarker: (marker: SnapshotMarker) => void;
   onRenameMarker: (markerId: string, label: string) => void;
   onDeleteMarker: (markerId: string) => void;
-  onLoadProSwing: (swingId: string) => void;
+  onLoadReference: (videoId: string) => void;
 }
 
 const markerLabels = [
@@ -51,7 +51,7 @@ export function SessionSidebar({
   syncEnabled,
   activePaneId,
   markers,
-  proSwings,
+  references,
   lastSavedAt,
   onNotesChange,
   onToggleSync,
@@ -60,7 +60,7 @@ export function SessionSidebar({
   onSeekMarker,
   onRenameMarker,
   onDeleteMarker,
-  onLoadProSwing,
+  onLoadReference,
 }: SessionSidebarProps) {
   const [activeTab, setActiveTab] = useState<"notes" | "markers" | "session">("notes");
   const [markerLabel, setMarkerLabel] = useState("Impact");
@@ -320,18 +320,24 @@ export function SessionSidebar({
                 Load reference
               </p>
               <div className="mt-2 space-y-2">
-                {proSwings.map((swing) => (
+                {references.length === 0 ? (
+                  <p className="text-xs text-[color:var(--color-muted)]">
+                    No references yet. Import a clip on the home screen with &ldquo;Save as
+                    reference&rdquo; turned on.
+                  </p>
+                ) : null}
+                {references.map((swing) => (
                   <button
                     key={swing.id}
                     type="button"
-                    onClick={() => onLoadProSwing(swing.id)}
+                    onClick={() => onLoadReference(swing.id)}
                     className="w-full border border-[color:var(--color-border)] bg-white/[0.025] p-2.5 text-left hover:border-[color:var(--color-accent)]"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-white">{swing.player}</p>
+                        <p className="truncate text-sm font-medium text-white">{swing.title}</p>
                         <p className="truncate text-xs text-[color:var(--color-muted)]">
-                          {swing.club} / {swing.viewAngle}
+                          {swing.clubTag} / {swing.orientation}
                         </p>
                       </div>
                       <span className="font-mono text-xs text-[color:var(--color-muted)]">

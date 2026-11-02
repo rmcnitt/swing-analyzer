@@ -1,6 +1,5 @@
 import { LibraryBrowser } from "@/components/library/library-browser";
 import { SiteHeader } from "@/components/site/site-header";
-import { proSwingReferences } from "@/lib/data/pro-swings";
 import { sampleSessions, sampleVideos } from "@/lib/data/seed";
 
 export default function LibraryPage() {
@@ -10,7 +9,6 @@ export default function LibraryPage() {
       <LibraryBrowser
         sessions={sampleSessions}
         videos={sampleVideos}
-        proSwings={proSwingReferences}
       />
     </div>
   );

@@ -2,8 +2,8 @@ export type PaneId = "primary" | "secondary";
 
 export type SwingOrientation = "face-on" | "down-the-line";
 export type UploadStatus = "ready" | "processing";
-export type VideoSourceType = "user" | "pro" | "local";
-export type Handedness = "right" | "left";
+/** "user": the user's own swings (sessions). "reference": clips imported to compare against. */
+export type VideoSourceType = "user" | "reference";
 export type AnnotationTool =
   | "select"
   | "line"
@@ -45,20 +45,6 @@ export interface VideoAsset {
   clubTag: string;
   uploadStatus: UploadStatus;
   createdAt: string;
-}
-
-export interface ProSwingReference {
-  id: string;
-  player: string;
-  title: string;
-  club: string;
-  viewAngle: SwingOrientation;
-  handedness: Handedness;
-  fps: number;
-  duration: number;
-  tags: string[];
-  videoUrl: string;
-  thumbnailUrl: string;
 }
 
 export interface AnalysisPane {
@@ -137,7 +123,6 @@ export interface AnalysisSession {
   panes: AnalysisPane[];
   annotations: Record<PaneId, AnnotationObject[]>;
   snapshotMarkers: SnapshotMarker[];
-  selectedProSwingId?: string;
 }
 
 /** Cross-pane coordination messages; `version` makes repeated identical signals distinct. */

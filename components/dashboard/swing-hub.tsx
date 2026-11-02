@@ -55,6 +55,8 @@ export function SwingHub({ sessions, videos }: SwingHubProps) {
   const [orientation, setOrientation] = useState<SwingOrientation>("face-on");
   const [notes, setNotes] = useState("");
   const [isImporting, setIsImporting] = useState(false);
+  const [saveAsReference, setSaveAsReference] = useState(false);
+  const [savedReferenceTitle, setSavedReferenceTitle] = useState<string | null>(null);
 
   useEffect(() => {
     void initializeLocalLibrary({
@@ -95,6 +97,7 @@ export function SwingHub({ sessions, videos }: SwingHubProps) {
     setPreviewUrl(nextPreviewUrl);
     setMetadata(nextMetadata);
     setSessionName(baseName || "Range swing");
+    setSavedReferenceTitle(null);
   };
 
   const handleCancelImport = () => {
@@ -107,6 +110,8 @@ export function SwingHub({ sessions, videos }: SwingHubProps) {
     setMetadata(null);
     setSessionName("");
     setNotes("");
+    setSaveAsReference(false);
+    setIsImporting(false);
   };
 
   const handleCreateSession = async () => {
@@ -125,8 +130,8 @@ export function SwingHub({ sessions, videos }: SwingHubProps) {
       description: notes.trim() || undefined,
       url: previewUrl,
       ownerId: "user-demo",
-      ownerName: "Local library",
-      sourceType: "local",
+      ownerName: saveAsReference ? "Reference" : "Local library",
+      sourceType: saveAsReference ? "reference" : "user",
       duration: metadata.duration,
       fps: 120,
       width: metadata.width,
@@ -136,6 +141,18 @@ export function SwingHub({ sessions, videos }: SwingHubProps) {
       uploadStatus: "ready",
       createdAt: now,
     };
+    const thumbnail = await createVideoThumbnail(previewUrl);
+
+    await saveStoredVideo(video, selectedFile, thumbnail);
+
+    if (saveAsReference) {
+      // References don't get their own session; they're loaded into a compare pane.
+      setStoredVideos(await loadStoredVideos());
+      handleCancelImport();
+      setSavedReferenceTitle(video.title);
+      return;
+    }
+
     const session: AnalysisSession = {
       id: sessionId,
       userId: "user-demo",
@@ -171,9 +188,6 @@ export function SwingHub({ sessions, videos }: SwingHubProps) {
       snapshotMarkers: [],
     };
 
-    const thumbnail = await createVideoThumbnail(previewUrl);
-
-    await saveStoredVideo(video, selectedFile, thumbnail);
     await saveStoredSession(session);
     router.push(`/analysis/${sessionId}`);
   };
@@ -267,7 +281,9 @@ export function SwingHub({ sessions, videos }: SwingHubProps) {
 
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               <label className="block">
-                <span className="text-xs text-[color:var(--color-muted)]">Session name</span>
+                <span className="text-xs text-[color:var(--color-muted)]">
+                  {saveAsReference ? "Reference name" : "Session name"}
+                </span>
                 <input
                   value={sessionName}
                   onChange={(event) => setSessionName(event.target.value)}
@@ -321,7 +337,19 @@ export function SwingHub({ sessions, videos }: SwingHubProps) {
               </label>
             </div>
 
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <label className="flex items-center gap-2 text-sm text-white">
+                <input
+                  type="checkbox"
+                  checked={saveAsReference}
+                  onChange={(event) => setSaveAsReference(event.target.checked)}
+                  className="size-4 accent-[color:var(--color-accent)]"
+                />
+                Save as reference
+                <span className="text-xs text-[color:var(--color-muted)]">
+                  (a model swing to compare against)
+                </span>
+              </label>
               <button
                 type="button"
                 onClick={handleCreateSession}
@@ -329,11 +357,21 @@ export function SwingHub({ sessions, videos }: SwingHubProps) {
                 className="inline-flex h-9 items-center gap-2 bg-[color:var(--color-accent)] px-3 text-sm font-semibold text-[color:var(--color-ink)] disabled:opacity-60"
               >
                 <Play className="size-4" />
-                Open analysis
+                {saveAsReference ? "Save reference" : "Open analysis"}
               </button>
             </div>
           </div>
         </section>
+      ) : null}
+
+      {savedReferenceTitle ? (
+        <p className="border border-[color:var(--color-border)] bg-[#0f1012] px-3 py-2 text-sm text-white">
+          Saved &ldquo;{savedReferenceTitle}&rdquo; to{" "}
+          <Link href="/library?tab=references" className="text-[color:var(--color-accent)] underline">
+            References
+          </Link>
+          . Load it into the compare pane from any session.
+        </p>
       ) : null}
 
       <section className="border border-[color:var(--color-border)] bg-[#0f1012]">

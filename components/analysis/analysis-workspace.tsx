@@ -14,11 +14,6 @@ import {
 import { AnalysisToolbar } from "@/components/analysis/analysis-toolbar";
 import { SessionSidebar } from "@/components/analysis/session-sidebar";
 import { VideoPane } from "@/components/analysis/video-pane";
-import { proSwingReferences, proSwingToVideoAsset } from "@/lib/data/pro-swings";
-import {
-  applyProSwingOverrides,
-  loadProSwingOverrides,
-} from "@/lib/storage/pro-swing-overrides";
 import {
   loadStoredSession,
   loadStoredVideos,
@@ -37,7 +32,6 @@ import type {
   MarkerSeekSignal,
   PaneId,
   PlaybackSignal,
-  ProSwingReference,
   SnapshotMarker,
   SyncSignal,
   VideoAsset,
@@ -50,7 +44,6 @@ interface AnalysisWorkspaceProps {
   /** Bundled sample session used when IndexedDB has no copy yet; null for user sessions. */
   seedSession: AnalysisSession | null;
   initialVideos: VideoAsset[];
-  proSwings?: ProSwingReference[];
 }
 
 type LoadState =
@@ -121,7 +114,21 @@ export function AnalysisWorkspace({ sessionId, seedSession, ...rest }: AnalysisW
 interface WorkspaceViewProps {
   initialSession: AnalysisSession;
   initialVideos: VideoAsset[];
-  proSwings?: ProSwingReference[];
+}
+
+function loadReferenceIntoSecondary(
+  session: AnalysisSession,
+  video: Pick<VideoAsset, "id" | "title"> | { id: string; title?: string },
+): AnalysisSession {
+  return {
+    ...session,
+    secondaryVideoId: video.id,
+    syncEnabled: true,
+    panes: replacePane(session.panes, "secondary", {
+      videoId: video.id,
+      label: video.title ? `${video.title} (reference)` : "Reference",
+    }),
+  };
 }
 
 type VideoMetadataPatch = Partial<VideoFileMetadata>;
@@ -144,12 +151,17 @@ function panePatchIsNoOp(pane: AnalysisPane, patch: Partial<AnalysisPane>) {
 function WorkspaceView({
   initialSession,
   initialVideos,
-  proSwings = proSwingReferences,
 }: WorkspaceViewProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [session, setSession] = useState(initialSession);
+  // "Add to compare" from the Library links here with ?compare=true&ref=<videoId>.
+  const initialReferenceId = searchParams.get("ref");
+  const [session, setSession] = useState(() =>
+    initialReferenceId
+      ? loadReferenceIntoSecondary(initialSession, { id: initialReferenceId })
+      : initialSession,
+  );
   const [uploadedVideos, setUploadedVideos] = useState<VideoAsset[]>([]);
   const [videoMetadataById, setVideoMetadataById] = useState<
     Record<string, VideoMetadataPatch>
@@ -165,7 +177,6 @@ function WorkspaceView({
   const [syncSignal, setSyncSignal] = useState<SyncSignal | null>(null);
   const [playbackSignal, setPlaybackSignal] = useState<PlaybackSignal | null>(null);
   const [markerSeekSignal, setMarkerSeekSignal] = useState<MarkerSeekSignal | null>(null);
-  const [proSwingOverrides, setProSwingOverrides] = useState(loadProSwingOverrides);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const compareMode = searchParams.get("compare") === "true";
@@ -186,8 +197,19 @@ function WorkspaceView({
     });
 
     void loadStoredVideos().then((storedVideos) => setUploadedVideos(storedVideos));
-    void Promise.resolve().then(() => setProSwingOverrides(loadProSwingOverrides()));
   }, []);
+
+  // Consume ?ref once so a reload or later navigation doesn't re-apply it.
+  useEffect(() => {
+    if (!initialReferenceId) {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    params.delete("ref");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [initialReferenceId, pathname, router]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -329,7 +351,7 @@ function WorkspaceView({
       url,
       ownerId: "user-demo",
       ownerName: "Robbie",
-      sourceType: "local",
+      sourceType: "user",
       duration: metadata.duration,
       fps: 120,
       width: metadata.width,
@@ -389,27 +411,20 @@ function WorkspaceView({
     }));
   };
 
-  const handleLoadProSwing = (swingId: string) => {
-    const swing = effectiveProSwings.find((item) => item.id === swingId);
+  const handleLoadReference = (videoId: string) => {
+    const reference = getVideo(videoId);
 
-    if (!swing) {
+    if (!reference) {
       return;
     }
 
     startTransition(() => {
-      const videoAsset = proSwingToVideoAsset(swing);
-
-      setSession((current) => ({
-        ...current,
-        selectedProSwingId: swingId,
-        secondaryVideoId: videoAsset.id,
-        syncEnabled: true,
-        panes: replacePane(current.panes, "secondary", {
-          videoId: videoAsset.id,
-          label: `${swing.player} reference`,
-        }),
-      }));
+      setSession((current) => loadReferenceIntoSecondary(current, reference));
     });
+
+    if (!compareMode) {
+      handleSetCompareMode(true);
+    }
   };
 
   const handleManualSave = () => {
@@ -489,13 +504,8 @@ function WorkspaceView({
     }
   };
 
-  const effectiveProSwings = applyProSwingOverrides(proSwings, proSwingOverrides);
-  const allVideos = uniqueById([...videos, ...effectiveProSwings.map(proSwingToVideoAsset)]).map(
-    (video) => ({
-      ...video,
-      ...videoMetadataById[video.id],
-    }),
-  );
+  const allVideos = videos;
+  const references = allVideos.filter((video) => video.sourceType === "reference");
   const getVideo = (videoId?: string) => allVideos.find((video) => video.id === videoId);
   const visiblePanes = compareMode
     ? session.panes
@@ -666,7 +676,7 @@ function WorkspaceView({
               syncEnabled={session.syncEnabled}
               activePaneId={effectiveActivePaneId}
               markers={session.snapshotMarkers}
-              proSwings={effectiveProSwings}
+              references={references}
               lastSavedAt={lastSavedAt}
               onNotesChange={(value) =>
                 setSession((current) => ({
@@ -685,7 +695,7 @@ function WorkspaceView({
               onSeekMarker={handleSeekMarker}
               onRenameMarker={handleRenameMarker}
               onDeleteMarker={handleDeleteMarker}
-              onLoadProSwing={handleLoadProSwing}
+              onLoadReference={handleLoadReference}
             />
           </div>
         ) : null}
