@@ -11,7 +11,18 @@ import {
   UploadCloud,
   X,
 } from "lucide-react";
-import { saveStoredSession, saveStoredVideo } from "@/lib/storage/session-storage";
+import {
+  ConfirmDeleteButton,
+  InlineRename,
+  StorageMeter,
+} from "@/components/library/library-actions";
+import {
+  deleteStoredSession,
+  renameStoredSession,
+  requestPersistentStorage,
+  saveStoredSession,
+  saveStoredVideo,
+} from "@/lib/storage/session-storage";
 import { useLocalLibrary } from "@/lib/storage/use-stored-videos";
 import type { AnalysisSession, SwingOrientation, VideoAsset } from "@/lib/types";
 import { createId, formatDate, formatDuration } from "@/lib/utils";
@@ -36,6 +47,7 @@ export function SwingHub() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const library = useLocalLibrary();
+  const [storageVersion, setStorageVersion] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<VideoFileMetadata | null>(null);
@@ -133,10 +145,12 @@ export function SwingHub() {
     const thumbnail = await createVideoThumbnail(previewUrl);
 
     await saveStoredVideo(video, selectedFile, thumbnail);
+    void requestPersistentStorage();
 
     if (saveAsReference) {
       // References don't get their own session; they're loaded into a compare pane.
       await library.reload();
+      setStorageVersion((current) => current + 1);
       handleCancelImport();
       setSavedReferenceTitle(video.title);
       return;
@@ -191,6 +205,9 @@ export function SwingHub() {
                 Swing library
               </p>
               <h1 className="mt-1 text-xl font-semibold text-white">Recent swings</h1>
+              <div className="mt-1.5">
+                <StorageMeter version={storageVersion} />
+              </div>
             </div>
             <button
               type="button"
@@ -364,7 +381,7 @@ export function SwingHub() {
       ) : null}
 
       <section className="border border-[color:var(--color-border)] bg-[#0f1012]">
-        <div className="grid grid-cols-[minmax(0,1fr)_110px_100px_130px] border-b border-[color:var(--color-border)] px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-[color:var(--color-muted)] max-lg:hidden">
+        <div className="grid grid-cols-[minmax(0,1fr)_110px_100px_230px] border-b border-[color:var(--color-border)] px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-[color:var(--color-muted)] max-lg:hidden">
           <span>Swing</span>
           <span>Club</span>
           <span>View</span>
@@ -378,7 +395,7 @@ export function SwingHub() {
             return (
               <article
                 key={session.id}
-                className="grid gap-3 px-3 py-2.5 lg:grid-cols-[minmax(0,1fr)_110px_100px_130px] lg:items-center"
+                className="grid gap-3 px-3 py-2.5 lg:grid-cols-[minmax(0,1fr)_110px_100px_230px] lg:items-center"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex aspect-video w-24 shrink-0 items-center justify-center overflow-hidden bg-black text-[color:var(--color-accent)]">
@@ -394,7 +411,11 @@ export function SwingHub() {
                     )}
                   </div>
                   <div className="min-w-0">
-                    <h2 className="truncate text-sm font-semibold text-white">{session.title}</h2>
+                    <InlineRename
+                      value={session.title}
+                      label="session"
+                      onSave={(title) => void renameStoredSession(session.id, title).then(library.reload)}
+                    />
                     <p className="mt-1 truncate text-xs text-[color:var(--color-muted)]">
                       {formatDate(session.lastOpenedAt)} / {video ? formatDuration(video.duration) : "0:00"} /{" "}
                       {session.snapshotMarkers.length} markers
@@ -406,7 +427,7 @@ export function SwingHub() {
                 <p className="text-sm text-[color:var(--color-muted)]">
                   {video?.orientation === "down-the-line" ? "DTL" : "Face-on"}
                 </p>
-                <div className="flex justify-start gap-2 lg:justify-end">
+                <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
                   <Link
                     href={`/analysis/${session.id}`}
                     className="flex h-8 items-center justify-center border border-[color:var(--color-border)] px-3 text-xs text-white hover:border-[color:var(--color-accent)]"
@@ -419,6 +440,15 @@ export function SwingHub() {
                   >
                     Compare
                   </Link>
+                  <ConfirmDeleteButton
+                    label={session.title}
+                    consequence="Deletes this session and its video from this browser."
+                    onConfirm={async () => {
+                      await deleteStoredSession(session.id);
+                      await library.reload();
+                      setStorageVersion((current) => current + 1);
+                    }}
+                  />
                 </div>
               </article>
             );

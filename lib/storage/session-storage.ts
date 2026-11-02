@@ -2,6 +2,10 @@
 
 import { sampleSessions, sampleVideos } from "@/lib/data/seed";
 import type { AnalysisSession, VideoAsset } from "@/lib/types";
+import {
+  planVideoDeletion,
+  videosOrphanedBySessionDelete,
+} from "@/lib/storage/library-cleanup";
 import { salvageSession } from "@/lib/storage/session-salvage";
 import { videoSchema } from "@/lib/validation";
 
@@ -260,6 +264,118 @@ export async function loadStoredVideoRecords(): Promise<VideoAsset[]> {
       return parsed.success ? parsed.data : null;
     })
     .filter((video): video is VideoAsset => Boolean(video));
+}
+
+/** Runs `action` in one transaction across several stores; resolves when it commits. */
+async function runTransaction(
+  storeNames: StoreName[],
+  action: (stores: Record<StoreName, IDBObjectStore>) => void,
+) {
+  const db = await openLocalDb();
+
+  if (!db) {
+    return false;
+  }
+
+  const committed = await new Promise<boolean>((resolve) => {
+    const transaction = db.transaction(storeNames, "readwrite");
+    const stores = Object.fromEntries(
+      storeNames.map((name) => [name, transaction.objectStore(name)]),
+    ) as Record<StoreName, IDBObjectStore>;
+
+    action(stores);
+    transaction.oncomplete = () => resolve(true);
+    transaction.onerror = () => resolve(false);
+    transaction.onabort = () => resolve(false);
+  });
+
+  db.close();
+  return committed;
+}
+
+const allDataStores: StoreName[] = [
+  sessionStoreName,
+  videoStoreName,
+  videoBlobStoreName,
+  thumbnailBlobStoreName,
+];
+
+export async function renameStoredSession(sessionId: string, title: string) {
+  const result = await loadStoredSession(sessionId);
+
+  if (result.status === "found") {
+    await saveStoredSession({ ...result.session, title });
+  }
+}
+
+/** Deletes a session and its own swing video (blobs included) if nothing else uses it. */
+export async function deleteStoredSession(sessionId: string) {
+  const [sessions, videos] = await Promise.all([loadStoredSessions(), loadStoredVideoRecords()]);
+  const session = sessions.find((item) => item.id === sessionId);
+  const orphanedVideoIds = session
+    ? videosOrphanedBySessionDelete(session, sessions, videos)
+    : [];
+
+  return runTransaction(allDataStores, (stores) => {
+    stores[sessionStoreName].delete(sessionId);
+
+    for (const videoId of orphanedVideoIds) {
+      stores[videoStoreName].delete(videoId);
+      stores[videoBlobStoreName].delete(videoId);
+      stores[thumbnailBlobStoreName].delete(videoId);
+    }
+  });
+}
+
+/**
+ * Deletes a video and its blobs. Sessions built on it are deleted too; sessions that only had it
+ * in the compare pane keep their work and get the pane cleared.
+ */
+export async function deleteStoredVideo(videoId: string) {
+  const plan = planVideoDeletion(videoId, await loadStoredSessions());
+
+  return runTransaction(allDataStores, (stores) => {
+    stores[videoStoreName].delete(videoId);
+    stores[videoBlobStoreName].delete(videoId);
+    stores[thumbnailBlobStoreName].delete(videoId);
+    plan.deleteSessionIds.forEach((id) => stores[sessionStoreName].delete(id));
+    plan.updatedSessions.forEach((session) => stores[sessionStoreName].put(session));
+  });
+}
+
+export interface StorageStatus {
+  usage: number;
+  quota: number;
+  persisted: boolean;
+}
+
+export async function getStorageStatus(): Promise<StorageStatus | null> {
+  if (typeof navigator === "undefined" || !navigator.storage?.estimate) {
+    return null;
+  }
+
+  const [estimate, persisted] = await Promise.all([
+    navigator.storage.estimate(),
+    navigator.storage.persisted?.() ?? Promise.resolve(false),
+  ]);
+
+  return { usage: estimate.usage ?? 0, quota: estimate.quota ?? 0, persisted };
+}
+
+/**
+ * Asks the browser not to evict IndexedDB under storage pressure. Call after the user saves a
+ * video (browsers grant it more readily after engagement). Safe to call repeatedly.
+ */
+export async function requestPersistentStorage() {
+  if (typeof navigator === "undefined" || !navigator.storage?.persist) {
+    return false;
+  }
+
+  try {
+    return (await navigator.storage.persisted()) || (await navigator.storage.persist());
+  } catch {
+    return false;
+  }
 }
 
 export function loadUiPreference(key: string) {

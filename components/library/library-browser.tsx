@@ -3,6 +3,17 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Columns2, FileVideo, Play, Search, Star } from "lucide-react";
+import {
+  ConfirmDeleteButton,
+  InlineRename,
+  StorageMeter,
+} from "@/components/library/library-actions";
+import {
+  deleteStoredSession,
+  deleteStoredVideo,
+  renameStoredSession,
+  updateStoredVideoMetadata,
+} from "@/lib/storage/session-storage";
 import { useLocalLibrary } from "@/lib/storage/use-stored-videos";
 import type { AnalysisSession, VideoAsset } from "@/lib/types";
 import { cn, formatDate, formatDuration } from "@/lib/utils";
@@ -13,6 +24,7 @@ export function LibraryBrowser() {
   const library = useLocalLibrary();
   const [activeTab, setActiveTab] = useState<LibraryTab>("my-swings");
   const [query, setQuery] = useState("");
+  const [storageVersion, setStorageVersion] = useState(0);
 
   useEffect(() => {
     // Read ?tab= after mount (not during render) so the static page hydrates cleanly.
@@ -27,7 +39,24 @@ export function LibraryBrowser() {
     () => new Map(allVideos.map((video) => [video.id, video])),
     [allVideos],
   );
-  const compareSessionId = allSessions[0]?.id ?? "sample-session";
+  const mostRecentSession = [...allSessions].sort(
+    (a, b) => new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime(),
+  )[0];
+  const compareSessionId = mostRecentSession?.id ?? "sample-session";
+  const actions: LibraryActions = {
+    renameSession: (id, title) => renameStoredSession(id, title).then(library.reload),
+    deleteSession: async (id) => {
+      await deleteStoredSession(id);
+      await library.reload();
+      setStorageVersion((current) => current + 1);
+    },
+    renameVideo: (id, title) => updateStoredVideoMetadata(id, { title }).then(library.reload),
+    deleteVideo: async (id) => {
+      await deleteStoredVideo(id);
+      await library.reload();
+      setStorageVersion((current) => current + 1);
+    },
+  };
   const normalizedQuery = query.trim().toLowerCase();
   const filteredSessions = allSessions.filter((session) => {
     const video = videoById.get(session.primaryVideoId);
@@ -52,6 +81,9 @@ export function LibraryBrowser() {
               Media bin
             </p>
             <h1 className="mt-1 text-xl font-semibold text-white">Video library</h1>
+            <div className="mt-1.5">
+              <StorageMeter version={storageVersion} />
+            </div>
           </div>
 
           <label className="flex h-8 min-w-64 items-center gap-2 border border-[color:var(--color-border)] bg-black/30 px-2.5 text-sm text-[color:var(--color-muted)]">
@@ -88,12 +120,17 @@ export function LibraryBrowser() {
         </div>
 
         {activeTab === "references" ? (
-          <ReferenceTable references={filteredReferences} compareSessionId={compareSessionId} />
+          <ReferenceTable
+            references={filteredReferences}
+            compareSessionId={compareSessionId}
+            actions={actions}
+          />
         ) : (
           <SessionTable
             sessions={activeTab === "recent" ? recentSessions : filteredSessions}
             videoById={videoById}
             showRecentMarker={activeTab === "recent"}
+            actions={actions}
           />
         )}
       </section>
@@ -101,18 +138,41 @@ export function LibraryBrowser() {
   );
 }
 
+interface LibraryActions {
+  renameSession: (id: string, title: string) => Promise<unknown>;
+  deleteSession: (id: string) => Promise<unknown>;
+  renameVideo: (id: string, title: string) => Promise<unknown>;
+  deleteVideo: (id: string) => Promise<unknown>;
+}
+
+const rowGrid = "lg:grid-cols-[minmax(0,1fr)_100px_100px_70px_250px]";
+
 function SessionTable({
   sessions,
   videoById,
   showRecentMarker,
+  actions,
 }: {
   sessions: AnalysisSession[];
   videoById: Map<string, VideoAsset>;
   showRecentMarker: boolean;
+  actions: LibraryActions;
 }) {
+  if (sessions.length === 0) {
+    return (
+      <p className="px-3 py-6 text-sm text-[color:var(--color-muted)]">
+        No swings yet.{" "}
+        <Link href="/" className="text-[color:var(--color-accent)] underline">
+          Import one
+        </Link>{" "}
+        to get started.
+      </p>
+    );
+  }
+
   return (
     <div>
-      <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_90px_132px] border-b border-[color:var(--color-border)] px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-[color:var(--color-muted)] max-lg:hidden">
+      <div className={`grid ${rowGrid} border-b border-[color:var(--color-border)] px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-[color:var(--color-muted)] max-lg:hidden`}>
         <span>Video</span>
         <span>Club</span>
         <span>View</span>
@@ -127,13 +187,17 @@ function SessionTable({
           return (
             <article
               key={session.id}
-              className="grid gap-3 px-3 py-2.5 lg:grid-cols-[minmax(0,1fr)_110px_110px_90px_132px] lg:items-center"
+              className={`grid gap-3 px-3 py-2.5 ${rowGrid} lg:items-center`}
             >
               <div className="flex min-w-0 items-center gap-3">
                 <VideoThumbnail video={video} />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <h2 className="truncate text-sm font-semibold text-white">{session.title}</h2>
+                    <InlineRename
+                      value={session.title}
+                      label="session"
+                      onSave={(title) => void actions.renameSession(session.id, title)}
+                    />
                     {showRecentMarker ? <Star className="size-3.5 text-[color:var(--color-accent)]" /> : null}
                   </div>
                   <p className="mt-1 truncate text-xs text-[color:var(--color-muted)]">
@@ -149,7 +213,7 @@ function SessionTable({
               <p className="font-mono text-xs text-[color:var(--color-muted)]">
                 {video ? `${video.fps ?? 60} fps` : "Local"}
               </p>
-              <div className="flex justify-start gap-2 lg:justify-end">
+              <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
                 <Link
                   href={`/analysis/${session.id}`}
                   className="flex h-8 items-center gap-1.5 border border-[color:var(--color-border)] px-2.5 text-xs text-white hover:border-[color:var(--color-accent)]"
@@ -164,6 +228,11 @@ function SessionTable({
                   <Columns2 className="size-3.5" />
                   Compare
                 </Link>
+                <ConfirmDeleteButton
+                  label={session.title}
+                  consequence="Deletes this session and its video from this browser."
+                  onConfirm={() => actions.deleteSession(session.id)}
+                />
               </div>
             </article>
           );
@@ -176,9 +245,11 @@ function SessionTable({
 function ReferenceTable({
   references,
   compareSessionId,
+  actions,
 }: {
   references: VideoAsset[];
   compareSessionId: string;
+  actions: LibraryActions;
 }) {
   if (references.length === 0) {
     return (
@@ -197,12 +268,16 @@ function ReferenceTable({
       {references.map((video) => (
         <article
           key={video.id}
-          className="grid gap-3 px-3 py-2.5 lg:grid-cols-[minmax(0,1fr)_110px_110px_90px_132px] lg:items-center"
+          className={`grid gap-3 px-3 py-2.5 ${rowGrid} lg:items-center`}
         >
           <div className="flex min-w-0 items-center gap-3">
             <VideoThumbnail video={video} />
             <div className="min-w-0">
-              <h2 className="truncate text-sm font-semibold text-white">{video.title}</h2>
+              <InlineRename
+                value={video.title}
+                label="reference"
+                onSave={(title) => void actions.renameVideo(video.id, title)}
+              />
               <p className="mt-1 truncate text-xs text-[color:var(--color-muted)]">
                 Added {formatDate(video.createdAt)}
               </p>
@@ -213,7 +288,7 @@ function ReferenceTable({
             {video.orientation === "down-the-line" ? "Down line" : "Face-on"}
           </p>
           <p className="font-mono text-xs text-[color:var(--color-muted)]">{video.fps ?? 60} fps</p>
-          <div className="flex justify-start gap-2 lg:justify-end">
+          <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
             <Link
               href={`/analysis/${compareSessionId}?compare=true&ref=${encodeURIComponent(video.id)}`}
               className="flex h-8 items-center gap-1.5 bg-[color:var(--color-accent)] px-2.5 text-xs font-semibold text-[color:var(--color-ink)]"
@@ -221,6 +296,11 @@ function ReferenceTable({
               <Columns2 className="size-3.5" />
               Add to compare
             </Link>
+            <ConfirmDeleteButton
+              label={video.title}
+              consequence="Deletes this clip. Sessions comparing against it keep their work."
+              onConfirm={() => actions.deleteVideo(video.id)}
+            />
           </div>
         </article>
       ))}

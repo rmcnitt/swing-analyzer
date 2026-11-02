@@ -18,6 +18,7 @@ import {
   ensureLocalLibrarySeeded,
   loadStoredSession,
   loadUiPreference,
+  requestPersistentStorage,
   saveStoredSession,
   saveStoredVideo,
   saveUiPreference,
@@ -358,6 +359,7 @@ function WorkspaceView({
     };
 
     await saveStoredVideo(asset, file, thumbnail);
+    void requestPersistentStorage();
     await reloadVideos();
     handleSelectVideo(paneId, asset.id);
   };
