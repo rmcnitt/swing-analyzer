@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+:root {
+  --background: #090a0c;
+  --foreground: #eef2f4;
+  --color-background: #090a0c;
+  --color-panel: rgba(21, 23, 26, 0.92);
+  --color-panel-strong: rgba(12, 13, 15, 0.96);
+  --color-panel-soft: rgba(255, 255, 255, 0.045);
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-muted: #8f989f;
+  --color-accent: #ff5a2a;
+  --color-accent-soft: #ff9a64;
+  --color-ink: #180c08;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-manrope);
+  --font-mono: var(--font-plex-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--color-background);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-manrope), sans-serif;
+}
+
+a,
+button,
+select,
+input,
+textarea {
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    transform 150ms ease,
+    opacity 150ms ease;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  cursor: pointer;
+}
+
+::selection {
+  background: rgba(255, 90, 42, 0.34);
+}
+
+.font-mono {
+  font-family: var(--font-plex-mono), monospace;
+}
