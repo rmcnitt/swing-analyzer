@@ -18,7 +18,7 @@ Baseline health: lint clean, 8/8 vitest pass, `tsc --noEmit` 1 error (tests/anno
 
 ---
 
-## Phase 0 — Foundation & hygiene  _(code done 2026-11-02; pending: folder move, GitHub push, sample clips)_
+## Phase 0 — Foundation & hygiene  _(done 2026-11-02)_
 1. Move project out of iCloud-synced `~/Documents` (suggest `~/dev/swing-analyzer`; user does the move), delete `.next/`, `git init`, first commit, push to a new GitHub repo.
 2. Remove Supabase: `lib/supabase/`, `supabase/migrations/`, `@supabase/*` deps, `.env.example`/`.env.local`, README section. Remove redirect stubs `app/login`, `app/dashboard` (keep `app/compare/[id]` redirect only if linked anywhere — it isn't after Phase 1, so remove).
 3. Media: gitignore `public/pro-swings/*` video files; delete 9KB placeholder mp4s. Remove the pro-swings generator from `dev`/`build` scripts (and `pro-swings.generated.ts`, `pro-swing-overrides.ts`) once references are user-imported (Phase 1).
