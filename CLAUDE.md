@@ -21,7 +21,10 @@ Next.js 16 App Router, React 19, TypeScript, Tailwind v4, react-konva (drawing),
 - `app/` thin route files; `/` hub, `/library`, `/analysis/[sessionId]` (`?compare=true` for two panes).
 - `components/analysis/` workspace: `analysis-workspace.tsx` (session state), `video-pane.tsx` (playback, sync,
   zoom), `annotation-canvas.tsx` (Konva shapes), `analysis-toolbar.tsx`, `session-sidebar.tsx`, `timeline.tsx`.
-- `lib/types.ts` domain types · `lib/validation.ts` zod schemas · `lib/analysis/` geometry + sync math (pure, unit-tested).
+  `position-bar.tsx` / `compare-position-bar.tsx` (swing checkpoints, jump both), `golfer-box-editor.tsx` (fit framing).
+- `lib/types.ts` domain types · `lib/validation.ts` zod schemas · `lib/analysis/` pure, unit-tested logic:
+  `sync.ts` (checkpoint time mapping) + `sync-group.ts` (pane playback/looping), `positions.ts`, `shape-edit.ts`,
+  `framing.ts`, `loop.ts`, `shortcuts.ts` (key map), `annotations.ts` (normalized geometry), `frames.ts` (fps/stepping).
 - Annotation geometry is stored **normalized 0–1** relative to the video frame; convert with `lib/analysis/annotations.ts`.
 
 ## Conventions

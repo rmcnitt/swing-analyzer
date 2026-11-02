@@ -42,18 +42,21 @@ Baseline health: lint clean, 8/8 vitest pass, `tsc --noEmit` 1 error (tests/anno
 - [x] **Unplayable video:** catch decode errors (e.g. HEVC .mov in Chrome) and show a clear message with guidance.
 - [x] **Delete / rename** sessions and videos from Hub and Library (IndexedDB blobs included); show storage usage via `navigator.storage.estimate()` and request persistence (`navigator.storage.persist()`).
 
-## Phase 2 — Core analysis UX (V1 / SwingCatalyst parity)
-- Keyboard shortcuts: Space play/pause, ←/→ frame, Shift+←/→ 10 frames, 1–5 speeds, tool hotkeys, ⌘Z/⇧⌘Z, Delete; `?` overlay listing them.
-- **Position-matched side-by-side compare** (the core comparison feature; panes stay side by side, never overlaid):
-  - Each pane gets swing-position checkpoints (Address, Takeaway, Top, Transition, Impact, Finish; reuses the existing marker labels in `session-sidebar.tsx`).
-  - "Jump both to position" buttons (e.g. Top) seek both panes to that position at once, so the user can study the same moment in each swing.
-  - Matched playback and stepping: between shared checkpoints the follower pane's time is mapped piecewise-linearly onto the leader's, so the two swings stay aligned at every position even when tempos differ (a 1.0s backswing compared with a 0.8s one). With only one shared checkpoint it falls back to a simple offset.
-  - Matched framing: per-pane zoom/pan (already exists) plus a "fit golfer" preset, so both golfers appear about the same size and position in their pane.
-  - Unit-test the mapping math in `lib/analysis/sync.ts` (offset, piecewise mapping, clamping at clip edges).
-- Edit shapes: select/move/resize (Konva Transformer + draggable endpoints), stroke width, label text, extended-line tool (plane line).
-- Loop range (in/out points) on the timeline.
-- Export current frame + drawings as PNG (both panes in compare).
-- Responsive: side-by-side compare on tablet landscape, top/bottom on portrait; inspector becomes a slide-over drawer below xl; toolbar adapts to touch targets.
+## Phase 2 — Core analysis UX (V1 / SwingCatalyst parity)  _(done 2026-11-02; awaiting browser review)_
+- [x] **Keyboard shortcuts** (`lib/analysis/shortcuts.ts`): Space, ←/→ (⇧ = 10 frames), 1–5 speeds, tool hotkeys (V H L A P B C G D), O drawings, [ ] R loop, E export, ⌘Z/⇧⌘Z, Delete, Esc; `?` overlay. Act on the active pane; ignored while typing.
+- [x] **Position-matched side-by-side compare** (panes never overlaid):
+  - Per-pane swing-position chips (Address, Takeaway, Top, Transition, Impact, Finish): click an unmarked one to mark the current frame, a marked one to jump; "Set" re-marks. Markers record the clip they were placed on (`videoId`).
+  - Compare strip: sync toggle + status ("Timing matched at N positions"), "Both to <position>" puts each pane on its own marked frame.
+  - Matched playback/stepping: shared checkpoints → piecewise-linear time map; the follower plays at the local tempo ratio (plus drift correction), falls back to an offset with one checkpoint, and holds at its clip edges. Pure math in `lib/analysis/sync.ts`, playback in `sync-group.ts`, both unit-tested.
+  - Matched framing: "Fit" per pane / "Fit both". The user drags a box around the golfer once per clip (stored as `VideoAsset.golferBox`); fit zooms/pans so the golfer fills the pane. Phase 3 pose can fill `golferBox` automatically.
+- [x] **Edit shapes** (`lib/analysis/shape-edit.ts`): Move tool drags shapes (kept in frame) and handles (endpoints, angle vertices, box corners, circle radius). Custom handles instead of Konva Transformer, so geometry stays normalized without rotation/scale transforms. Palette + new width picker restyle the selection; floating label field; labels render on canvas. New plane-line tool (edge to edge).
+- [x] **Loop range**: per-pane in/out (persisted), Loop button / R, draggable timeline handles, [ ] at current frame; first loop defaults to Address→Finish. Synced followers re-map on each wrap.
+- [x] **Export PNG** (E / header button): native-resolution frame + drawings, both panes side by side in compare, captioned with clip, position and timecode.
+- [x] **Responsive**: compare side by side in landscape, stacked in portrait; pane controls use container queries; inspector is a drawer below xl; 40–44px touch targets on coarse pointers; phone gets a simplified pane (no chip row).
+
+Follow-ups noticed (not done):
+- Reference clips' positions/golfer box are per session (positions) or per clip (box). Storing positions on reference videos would let users mark a pro clip once and reuse it in every session; Phase 3 auto-detection may make this moot.
+- Sync stays off for sessions that start with it off (e.g. samples) until toggled; consider auto-enabling when the first shared checkpoint is marked.
 
 ## Phase 3 — Pose-estimation feature
 - In-browser MediaPipe Pose Landmarker (WASM, lazy-loaded only when toggled), run per-frame on demand / cached per video in IndexedDB.
