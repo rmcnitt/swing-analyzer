@@ -3,11 +3,21 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import type Konva from "konva";
 import { Arrow, Circle, Layer, Line, Rect, Stage, Text } from "react-konva";
-import type { AnnotationObject, AnnotationTool, HexColor, PaneId, Point } from "@/lib/types";
+import type {
+  AnnotationGeometry,
+  AnnotationObject,
+  AnnotationTool,
+  HexColor,
+  PaneId,
+  Point,
+} from "@/lib/types";
 import {
+  clientToStagePoint,
   createAnnotationBase,
   geometryToAbsolute,
   geometryToNormalized,
+  isDegenerateShape,
+  MIN_SHAPE_EXTENT_PX,
   normalizePoint,
 } from "@/lib/analysis/annotations";
 import { cn } from "@/lib/utils";
@@ -45,6 +55,28 @@ function getRectFromPoints(start: Point, end: Point) {
       height: Math.abs(end.y - start.y),
     },
   };
+}
+
+/** Absolute (stage px) geometry for an in-progress drag; used for both preview and commit. */
+function draftToGeometry(draft: DraftShape): AnnotationGeometry {
+  const start = draft.points[0];
+  const end = draft.points[draft.points.length - 1];
+
+  switch (draft.type) {
+    case "rectangle":
+      return { kind: "rectangle", ...getRectFromPoints(start, end) };
+    case "circle":
+      return {
+        kind: "circle",
+        center: start,
+        radius: Math.hypot(end.x - start.x, end.y - start.y),
+      };
+    case "freehand":
+      return { kind: "freehand", points: draft.points };
+    case "line":
+    case "arrow":
+      return { kind: draft.type, points: [start, end] };
+  }
 }
 
 function angleBetween(a: Point, b: Point, c: Point) {
@@ -100,27 +132,116 @@ export function AnnotationCanvas({
     return () => observer.disconnect();
   }, []);
 
-  const getPointerPosition = () => {
-    const stage = stageRef.current;
+  // Latest draft for the window-level listeners (which are bound once per drag).
+  const draftRef = useRef<DraftShape | null>(null);
+  const activePointerRef = useRef<number | null>(null);
+  const isDrafting = draft !== null;
 
-    if (!stage) {
+  const updateDraft = (next: DraftShape | null) => {
+    draftRef.current = next;
+    setDraft(next);
+  };
+
+  const toStagePoint = (event: PointerEvent): Point | null => {
+    const node = stageRef.current?.container();
+
+    if (!node) {
       return null;
     }
 
-    const pointer = stage.getPointerPosition();
-
-    if (!pointer) {
-      return null;
-    }
-
-    return pointer as Point;
+    return clientToStagePoint(
+      { x: event.clientX, y: event.clientY },
+      node.getBoundingClientRect(),
+      stageSize,
+    );
   };
 
   const commitShape = (shape: AnnotationObject) => {
     onChange([...annotations, shape]);
   };
 
-  const handlePointerDown = (event: Konva.KonvaEventObject<MouseEvent>) => {
+  const finishDraft = (cancelled: boolean) => {
+    const current = draftRef.current;
+    activePointerRef.current = null;
+    updateDraft(null);
+
+    if (!current || cancelled) {
+      return;
+    }
+
+    const geometry = draftToGeometry(current);
+
+    if (isDegenerateShape(geometry)) {
+      return;
+    }
+
+    commitShape(
+      createAnnotationBase(
+        current.type,
+        paneId,
+        geometryToNormalized(geometry, stageSize),
+        color,
+        annotations.length + 1,
+      ),
+    );
+  };
+
+  // Track the drag on window so strokes that leave the stage (or the pane) still finish.
+  const handlersRef = useRef({ toStagePoint, finishDraft });
+  useEffect(() => {
+    handlersRef.current = { toStagePoint, finishDraft };
+  });
+
+  useEffect(() => {
+    if (!isDrafting) {
+      return;
+    }
+
+    const onMove = (event: PointerEvent) => {
+      const current = draftRef.current;
+
+      if (!current || event.pointerId !== activePointerRef.current) {
+        return;
+      }
+
+      const pointer = handlersRef.current.toStagePoint(event);
+
+      if (!pointer) {
+        return;
+      }
+
+      if (current.type === "freehand") {
+        const last = current.points[current.points.length - 1];
+
+        if (Math.hypot(pointer.x - last.x, pointer.y - last.y) >= 1) {
+          updateDraft({ ...current, points: [...current.points, pointer] });
+        }
+
+        return;
+      }
+
+      updateDraft({ ...current, points: [current.start, pointer] });
+    };
+    const onUp = (event: PointerEvent) => {
+      if (event.pointerId === activePointerRef.current) {
+        handlersRef.current.finishDraft(event.type === "pointercancel");
+      }
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, [isDrafting]);
+
+  const handlePointerDown = (event: Konva.KonvaEventObject<PointerEvent>) => {
+    const native = event.evt;
+
     if (tool === "select" && event.target === event.target.getStage()) {
       onSelectionChange(null);
       return;
@@ -130,15 +251,38 @@ export function AnnotationCanvas({
       return;
     }
 
-    const pointer = getPointerPosition();
+    // One stroke at a time: ignore extra fingers and non-primary mouse buttons.
+    if (!native.isPrimary || activePointerRef.current !== null) {
+      return;
+    }
+
+    if (native.pointerType === "mouse" && native.button !== 0) {
+      return;
+    }
+
+    const pointer = toStagePoint(native);
 
     if (!pointer) {
       return;
     }
 
+    native.preventDefault();
+
     if (tool === "angle") {
-      const normalized = normalizePoint(pointer, stageSize);
-      const nextPoints = [...anglePoints, normalized];
+      const previous = anglePoints[anglePoints.length - 1];
+
+      // A double-tap on the same spot would make a zero-length arm.
+      if (
+        previous &&
+        Math.hypot(
+          pointer.x - previous.x * stageSize.width,
+          pointer.y - previous.y * stageSize.height,
+        ) < MIN_SHAPE_EXTENT_PX
+      ) {
+        return;
+      }
+
+      const nextPoints = [...anglePoints, normalizePoint(pointer, stageSize)];
 
       if (nextPoints.length === 3) {
         commitShape(
@@ -161,118 +305,12 @@ export function AnnotationCanvas({
       return;
     }
 
-    setDraft({
+    activePointerRef.current = native.pointerId;
+    updateDraft({
       type: tool,
       start: pointer,
       points: [pointer, pointer],
     });
-  };
-
-  const handlePointerMove = () => {
-    if (!draft) {
-      return;
-    }
-
-    const pointer = getPointerPosition();
-
-    if (!pointer) {
-      return;
-    }
-
-    if (draft.type === "freehand") {
-      setDraft({
-        ...draft,
-        points: [...draft.points, pointer],
-      });
-      return;
-    }
-
-    setDraft({
-      ...draft,
-      points: [draft.start, pointer],
-    });
-  };
-
-  const handlePointerUp = () => {
-    if (!draft) {
-      return;
-    }
-
-    const [start, end] = draft.points;
-    let annotation: AnnotationObject | null = null;
-
-    if (draft.type === "line" || draft.type === "arrow") {
-      annotation = createAnnotationBase(
-        draft.type,
-        paneId,
-        geometryToNormalized(
-          {
-            kind: draft.type,
-            points: [start, end],
-          },
-          stageSize,
-        ),
-        color,
-        annotations.length + 1,
-      );
-    }
-
-    if (draft.type === "rectangle") {
-      const rect = getRectFromPoints(start, end);
-      annotation = createAnnotationBase(
-        "rectangle",
-        paneId,
-        geometryToNormalized(
-          {
-            kind: "rectangle",
-            origin: rect.origin,
-            size: rect.size,
-          },
-          stageSize,
-        ),
-        color,
-        annotations.length + 1,
-      );
-    }
-
-    if (draft.type === "circle") {
-      annotation = createAnnotationBase(
-        "circle",
-        paneId,
-        geometryToNormalized(
-          {
-            kind: "circle",
-            center: start,
-            radius: Math.sqrt((end.x - start.x) ** 2 + (end.y - start.y) ** 2),
-          },
-          stageSize,
-        ),
-        color,
-        annotations.length + 1,
-      );
-    }
-
-    if (draft.type === "freehand" && draft.points.length > 1) {
-      annotation = createAnnotationBase(
-        "freehand",
-        paneId,
-        geometryToNormalized(
-          {
-            kind: "freehand",
-            points: draft.points,
-          },
-          stageSize,
-        ),
-        color,
-        annotations.length + 1,
-      );
-    }
-
-    if (annotation) {
-      commitShape(annotation);
-    }
-
-    setDraft(null);
   };
 
   const renderAnnotation = (annotation: AnnotationObject) => {
@@ -425,37 +463,7 @@ export function AnnotationCanvas({
     }
   };
 
-  const previewGeometry = draft
-    ? geometryToAbsolute(
-        geometryToNormalized(
-          draft.type === "rectangle"
-            ? {
-                kind: "rectangle",
-                ...getRectFromPoints(draft.points[0], draft.points[draft.points.length - 1]),
-              }
-            : draft.type === "circle"
-              ? {
-                  kind: "circle",
-                  center: draft.points[0],
-                  radius: Math.sqrt(
-                    (draft.points[draft.points.length - 1].x - draft.points[0].x) ** 2 +
-                      (draft.points[draft.points.length - 1].y - draft.points[0].y) ** 2,
-                  ),
-                }
-              : draft.type === "freehand"
-                ? {
-                    kind: "freehand",
-                    points: draft.points,
-                  }
-                : {
-                    kind: draft.type,
-                    points: [draft.points[0], draft.points[draft.points.length - 1]],
-                  },
-          stageSize,
-        ),
-        stageSize,
-      )
-    : null;
+  const previewGeometry = draft ? draftToGeometry(draft) : null;
 
   return (
     <div
@@ -470,9 +478,7 @@ export function AnnotationCanvas({
         ref={stageRef}
         width={Math.max(stageSize.width, 1)}
         height={Math.max(stageSize.height, 1)}
-        onMouseDown={handlePointerDown}
-        onMouseMove={handlePointerMove}
-        onMouseUp={handlePointerUp}
+        onPointerDown={handlePointerDown}
         className={tool === "select" || tool === "zoom-pan" ? "cursor-default" : "cursor-crosshair"}
       >
         <Layer>

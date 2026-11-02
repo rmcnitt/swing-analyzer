@@ -178,6 +178,67 @@ export function clampGeometry(geometry: AnnotationGeometry): AnnotationGeometry 
   }
 }
 
+interface ClientRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Maps a pointer's client (viewport) position into unscaled stage pixels. `rect` is the stage
+ * element's getBoundingClientRect(), which already includes any CSS zoom/pan transform, so
+ * dividing by the rendered/unscaled ratio undoes the zoom.
+ */
+export function clientToStagePoint(
+  client: Point,
+  rect: ClientRect,
+  stageSize: StageSize,
+): Point | null {
+  if (!rect.width || !rect.height || !stageSize.width || !stageSize.height) {
+    return null;
+  }
+
+  return {
+    x: ((client.x - rect.left) / rect.width) * stageSize.width,
+    y: ((client.y - rect.top) / rect.height) * stageSize.height,
+  };
+}
+
+function distance(a: Point, b: Point) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+/** Minimum on-screen extent (in stage px) for a drag to count as a shape rather than a click. */
+export const MIN_SHAPE_EXTENT_PX = 4;
+
+/** True when a shape (in absolute stage px) is too small to be intentional, e.g. a stray click. */
+export function isDegenerateShape(geometry: AnnotationGeometry, minExtent = MIN_SHAPE_EXTENT_PX) {
+  switch (geometry.kind) {
+    case "line":
+    case "arrow":
+      return distance(geometry.points[0], geometry.points[1]) < minExtent;
+    case "rectangle":
+      return geometry.size.width < minExtent || geometry.size.height < minExtent;
+    case "circle":
+      return geometry.radius < minExtent;
+    case "angle":
+      return (
+        distance(geometry.points[0], geometry.points[1]) < minExtent ||
+        distance(geometry.points[1], geometry.points[2]) < minExtent
+      );
+    case "freehand": {
+      let length = 0;
+
+      for (let index = 1; index < geometry.points.length; index += 1) {
+        length += distance(geometry.points[index - 1], geometry.points[index]);
+      }
+
+      return length < minExtent;
+    }
+  }
+}
+
 export function serializeAnnotations(annotations: AnnotationObject[]) {
   return JSON.stringify(annotations);
 }

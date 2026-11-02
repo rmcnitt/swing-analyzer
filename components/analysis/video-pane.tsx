@@ -580,9 +580,8 @@ export function VideoPane({
           {video ? (
             <div className="absolute inset-0 flex items-center justify-center">
               <div
-                // Video and Konva overlay are transformed together so existing normalized
-                // annotations stay visually aligned. New drawings should be made at 100% zoom
-                // for precise pointer-to-canvas coordinates.
+                // Video and Konva overlay are transformed together so normalized annotations stay
+                // aligned; the canvas maps pointer positions back through this transform.
                 className="relative overflow-hidden bg-black"
                 style={{
                   width: `${stageSize.width}px`,
