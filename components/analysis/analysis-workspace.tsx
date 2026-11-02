@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { startTransition } from "react";
 import {
   Columns2,
+  ImageDown,
   Keyboard,
   LibraryBig,
   PanelRightClose,
@@ -40,8 +41,9 @@ import type {
   SnapshotMarker,
   VideoAsset,
 } from "@/lib/types";
-import { createId, uniqueById } from "@/lib/utils";
-import { DEFAULT_FPS } from "@/lib/analysis/frames";
+import { createId, formatTimecode, uniqueById } from "@/lib/utils";
+import { composeCaptures, downloadCanvas, exportFileName, type FrameCapture } from "@/lib/video/frame-export";
+import { DEFAULT_FPS, frameIndexAt } from "@/lib/analysis/frames";
 import { DEFAULT_STROKE_WIDTH, STROKE_WIDTHS } from "@/lib/analysis/annotations";
 import { defaultLoop, setLoopPoint } from "@/lib/analysis/loop";
 import {
@@ -49,6 +51,7 @@ import {
   paneMarkers,
   positionKey,
   positionTimes,
+  SWING_POSITIONS,
   upsertPositionMarker,
 } from "@/lib/analysis/positions";
 import { isTypingTarget, resolveShortcut, type ShortcutAction } from "@/lib/analysis/shortcuts";
@@ -209,6 +212,17 @@ function WorkspaceView({
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const capturesRef = useRef(new Map<PaneId, () => HTMLCanvasElement | null>());
+  const registerCapture = useCallback(
+    (paneId: PaneId, capture: (() => HTMLCanvasElement | null) | null) => {
+      if (capture) {
+        capturesRef.current.set(paneId, capture);
+      } else {
+        capturesRef.current.delete(paneId);
+      }
+    },
+    [],
+  );
   const [uploadProblem, setUploadProblem] = useState<{
     problem: PlaybackProblem;
     fileName: string;
@@ -277,6 +291,9 @@ function WorkspaceView({
   const allVideos = videos;
   const references = allVideos.filter((video) => video.sourceType === "reference");
   const getVideo = (videoId?: string) => allVideos.find((video) => video.id === videoId);
+  const visiblePanes = compareMode
+    ? session.panes
+    : session.panes.filter((pane) => pane.id === "primary");
   const activePane =
     session.panes.find((pane) => pane.id === effectiveActivePaneId) ?? session.panes[0];
   const overlayVisible = activePane?.overlayVisible ?? true;
@@ -644,6 +661,39 @@ function WorkspaceView({
     });
   };
 
+  /** Saves the visible pane(s) at their current frame, with drawings, as one PNG. */
+  const handleExportFrame = async () => {
+    const captures: FrameCapture[] = [];
+
+    for (const pane of visiblePanes) {
+      const canvas = capturesRef.current.get(pane.id)?.();
+      const video = getVideo(pane.videoId);
+
+      if (!canvas || !video) {
+        continue;
+      }
+
+      const time = syncGroup.get(pane.id)?.currentTime ?? 0;
+      const frame = frameIndexAt(time, video.fps);
+      const position = SWING_POSITIONS.find((label) => {
+        const marked = positionsByPane[pane.id].get(positionKey(label));
+        return marked !== undefined && frameIndexAt(marked, video.fps) === frame;
+      });
+
+      captures.push({
+        canvas,
+        caption: [video.title, position, formatTimecode(time)].filter(Boolean).join("  ·  "),
+      });
+    }
+
+    if (captures.length === 0) {
+      return;
+    }
+
+    const primaryTime = syncGroup.get(visiblePanes[0].id)?.currentTime ?? 0;
+    await downloadCanvas(composeCaptures(captures), exportFileName(session.title, primaryTime));
+  };
+
   const runShortcut = (action: ShortcutAction) => {
     const paneId = effectiveActivePaneId;
 
@@ -671,6 +721,9 @@ function WorkspaceView({
         break;
       case "toggle-overlay":
         handleToggleOverlay();
+        break;
+      case "export-frame":
+        void handleExportFrame();
         break;
       case "loop-point":
       case "toggle-loop":
@@ -728,9 +781,6 @@ function WorkspaceView({
     }
   };
 
-  const visiblePanes = compareMode
-    ? session.panes
-    : session.panes.filter((pane) => pane.id === "primary");
 
   return (
     <div className="flex h-screen min-h-[640px] flex-col overflow-hidden bg-[#07080a] text-white">
@@ -787,6 +837,15 @@ function WorkspaceView({
           >
             <Save className="size-3.5" />
             <span className="hidden sm:inline">Save</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleExportFrame()}
+            className="flex h-8 items-center gap-2 border border-[color:var(--color-border)] px-2.5 text-xs text-[color:var(--color-muted)] hover:border-white/20 hover:text-white"
+            title={compareMode ? "Export both frames with drawings as PNG (E)" : "Export frame with drawings as PNG (E)"}
+          >
+            <ImageDown className="size-3.5" />
+            <span className="hidden lg:inline">Export</span>
           </button>
           <button
             type="button"
@@ -904,6 +963,7 @@ function WorkspaceView({
                 onJumpToPosition={handleJumpToPosition}
                 onMarkPosition={addMarker}
                 onSetGolferBox={handleSetGolferBox}
+                onRegisterCapture={registerCapture}
               />
             ))}
           </div>

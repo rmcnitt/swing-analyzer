@@ -92,6 +92,8 @@ interface VideoPaneProps {
   onAnnotationsChange: (paneId: PaneId, annotations: AnnotationObject[]) => void;
   onJumpToPosition: (paneId: PaneId, label: string) => void;
   onSetGolferBox: (videoId: string, box: NormalizedRect) => void;
+  /** Registers this pane's frame capture (video + drawings) for PNG export. */
+  onRegisterCapture: (paneId: PaneId, capture: (() => HTMLCanvasElement | null) | null) => void;
   onMarkPosition: (paneId: PaneId, label: string, time: number) => void;
 }
 
@@ -132,6 +134,7 @@ export function VideoPane({
   onJumpToPosition,
   onMarkPosition,
   onSetGolferBox,
+  onRegisterCapture,
 }: VideoPaneProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaViewportRef = useRef<HTMLDivElement | null>(null);
@@ -323,6 +326,48 @@ export function VideoPane({
   };
 
   const stepBy = (frames: number) => syncGroup.step(pane.id, frames, video?.fps);
+
+  const overlayRendererRef = useRef<((width: number) => HTMLCanvasElement | null) | null>(null);
+
+  /** The current frame at the clip's native size, with drawings when they're shown. */
+  const captureFrame = () => {
+    const element = videoRef.current;
+
+    if (!element?.videoWidth) {
+      return null;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = element.videoWidth;
+    canvas.height = element.videoHeight;
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      return null;
+    }
+
+    context.drawImage(element, 0, 0, canvas.width, canvas.height);
+
+    if (pane.overlayVisible) {
+      const overlay = overlayRendererRef.current?.(canvas.width);
+
+      if (overlay) {
+        context.drawImage(overlay, 0, 0, canvas.width, canvas.height);
+      }
+    }
+
+    return canvas;
+  };
+  const captureFrameRef = useRef(captureFrame);
+
+  useEffect(() => {
+    captureFrameRef.current = captureFrame;
+  });
+
+  useEffect(() => {
+    onRegisterCapture(pane.id, () => captureFrameRef.current());
+    return () => onRegisterCapture(pane.id, null);
+  }, [onRegisterCapture, pane.id]);
 
   const loop = pane.loopEnabled && pane.loop ? pane.loop : undefined;
 
@@ -746,6 +791,7 @@ export function VideoPane({
                   selectedAnnotationId={selectedAnnotationId}
                   onSelectionChange={(annotationId) => onSelectionChange(pane.id, annotationId)}
                   onChange={(next) => onAnnotationsChange(pane.id, next)}
+                  overlayRendererRef={overlayRendererRef}
                 />
 
                 {boxMode ? (

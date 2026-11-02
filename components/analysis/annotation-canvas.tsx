@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type Konva from "konva";
 import { Arrow, Circle, Layer, Line, Rect, Stage, Text } from "react-konva";
 import type {
@@ -42,6 +42,8 @@ interface AnnotationCanvasProps {
   selectedAnnotationId?: string | null;
   onSelectionChange: (annotationId: string | null) => void;
   onChange: (annotations: AnnotationObject[]) => void;
+  /** Filled with a function that renders the drawings (no edit chrome) at a given width. */
+  overlayRendererRef?: RefObject<((width: number) => HTMLCanvasElement | null) | null>;
 }
 
 interface StageSize {
@@ -113,6 +115,7 @@ export function AnnotationCanvas({
   selectedAnnotationId,
   onSelectionChange,
   onChange,
+  overlayRendererRef,
 }: AnnotationCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -138,6 +141,35 @@ export function AnnotationCanvas({
 
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (!overlayRendererRef) {
+      return;
+    }
+
+    overlayRendererRef.current = (width) => {
+      const stage = stageRef.current;
+
+      if (!stage || !stage.width()) {
+        return null;
+      }
+
+      // Exports show the drawings as-is, without handles or the selection glow.
+      const chrome = stage.find(".edit-chrome");
+      const glowing = stage.find<Konva.Shape>(".selected");
+      chrome.forEach((node) => node.hide());
+      glowing.forEach((node) => node.shadowEnabled(false));
+      const canvas = stage.toCanvas({ pixelRatio: width / stage.width() });
+      chrome.forEach((node) => node.show());
+      glowing.forEach((node) => node.shadowEnabled(true));
+
+      return canvas;
+    };
+
+    return () => {
+      overlayRendererRef.current = null;
+    };
+  }, [overlayRendererRef]);
 
   // Latest gesture for the window-level listeners (which are bound once per drag).
   const gestureRef = useRef<Gesture | null>(null);
@@ -385,6 +417,7 @@ export function AnnotationCanvas({
     const width = isSelected ? annotation.style.strokeWidth + 1 : annotation.style.strokeWidth;
     const canEdit = tool === "select";
     const shapeProps = {
+      name: isSelected ? "selected" : undefined,
       stroke,
       strokeWidth: width,
       opacity,
@@ -515,6 +548,7 @@ export function AnnotationCanvas({
             ? shapeHandles(selectedGeometry).map((point, index) => (
                 <Circle
                   key={`handle-${index}`}
+                  name="edit-chrome"
                   x={point.x}
                   y={point.y}
                   radius={6}

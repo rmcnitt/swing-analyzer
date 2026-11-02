@@ -26,6 +26,7 @@ export type ShortcutAction =
   | { type: "toggle-overlay" }
   | { type: "loop-point"; point: "start" | "end" }
   | { type: "toggle-loop" }
+  | { type: "export-frame" }
   | { type: "toggle-help" }
   | { type: "escape" };
 
@@ -99,6 +100,10 @@ export function resolveShortcut({ key, shiftKey, metaKey, ctrlKey, altKey }: Key
     return { type: "toggle-loop" };
   }
 
+  if (lower === "e") {
+    return { type: "export-frame" };
+  }
+
   const tool = toolsByKey.get(lower);
   return tool ? { type: "tool", tool } : null;
 }
@@ -157,6 +162,7 @@ export const SHORTCUT_GROUPS: Array<{ title: string; items: Array<[keys: string,
     items: [
       ["⌘Z", "Undo"],
       ["⇧⌘Z", "Redo"],
+      ["E", "Export frame as PNG"],
       ["Delete", "Delete selected shape"],
       ["Drag", "Move a shape or its handles (Move tool)"],
       ["Esc", "Deselect / close"],
