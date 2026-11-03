@@ -65,15 +65,19 @@ session fields are optional, so main keeps reading the same browser data either 
    `@mediapipe/tasks-vision@1.1.1`), lazy-loaded on first use, self-hosted (model in `public/mediapipe/`, wasm
    copied from node_modules on dev/build). Every frame analyzed once; tracks cached per video.
 2. [x] **Skeleton overlay**: per-pane Pose button (analyze → toggle), drawn inside the zoom/pan transform,
-   included in PNG export. ← **checkpoint: review detection quality on real clips before continuing.**
-3. [ ] **Auto golfer box** from landmarks across the swing; "Fit" works without dragging (a drawn box wins).
-4. [ ] **Auto swing positions** (Address/Top/Impact/Finish) from the hand path → suggested checkpoints; auto-enable
-   sync once both panes share positions. Pure detection in `lib/analysis/`, tested on recorded landmark fixtures.
+   included in PNG export. Reviewed 2026-11-03: hands/legs solid; shoulders/elbows drift at the top
+   (torso rotated away) and hips under loose clothing. Heavy model tested: no better, 3× the size.
+3. [x] **Auto golfer box** (`lib/pose/golfer-box.ts`) from landmarks across the swing; "Fit" works without
+   dragging (a drawn box wins). Not stored, derived from the track.
+4. [x] **Auto swing positions** (`lib/pose/swing-positions.ts`) Address/Top/Impact/Finish from the hand path;
+   added as `source: "pose"` marks without replacing the user's, once per clip (`pane.autoPositionsFor`); "Auto"
+   re-detects. Sync turns on when both swings share ≥2 positions. Tracks are cleaned first (side-swap fix +
+   smoothing, `clean-track.ts`). Tested on recorded sample tracks (`tests/fixtures/pose/`) vs hand-labelled
+   frames. ← **checkpoint: review on real clips.**
 5. [ ] **Joint angles** (spine tilt, lead arm, knee flex) from world landmarks, labelled approximate.
 6. [ ] _(optional)_ Angle-over-time chart.
 
-Notes: analysis took ~60 ms/frame in headless Chrome (~20 s for a 5 s 60 fps clip); measure on real hardware.
-The sample session's down-the-line Top/Impact marks are ~0.25 s early (seed data); step 4 should replace them.
+Notes: analysis takes ~10–17 s per 5 s clip on the user's machine. Takeaway and Transition aren't detected.
 
 ## Phase 4 — Ship it
 - Landing/first-run: hub explains in one line, "Try the sample swing" + "Upload your swing" CTAs; privacy note ("videos never leave your browser").
