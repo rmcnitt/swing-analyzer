@@ -57,6 +57,9 @@ import {
 import { isTypingTarget, resolveShortcut, type ShortcutAction } from "@/lib/analysis/shortcuts";
 import { createCheckpointMapper, matchCheckpoints } from "@/lib/analysis/sync";
 import { SyncGroup } from "@/lib/analysis/sync-group";
+import { loadPoseTrack, savePoseTrack } from "@/lib/pose/pose-cache";
+import { analyzeVideo } from "@/lib/pose/pose-engine";
+import { createPoseStore } from "@/lib/pose/pose-store";
 import type { PlaybackProblem } from "@/lib/video/playback-errors";
 import { createVideoThumbnail, detectVideoFps, readVideoMetadata, type VideoFileMetadata } from "@/lib/video/media";
 
@@ -209,6 +212,11 @@ function WorkspaceView({
   const [undoStack, setUndoStack] = useState<Array<Record<PaneId, AnnotationObject[]>>>([]);
   const [redoStack, setRedoStack] = useState<Array<Record<PaneId, AnnotationObject[]>>>([]);
   const [syncGroup] = useState(() => new SyncGroup());
+  const [poseStore] = useState(() =>
+    createPoseStore({ load: loadPoseTrack, save: savePoseTrack, analyze: analyzeVideo }),
+  );
+
+  useEffect(() => () => poseStore.cancelAll(), [poseStore]);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   // Docked at xl and up; below that it's a drawer over the video, so start closed.
   const [inspectorOpen, setInspectorOpen] = useState(
@@ -948,6 +956,7 @@ function WorkspaceView({
                 selectedAnnotationId={selectedAnnotationByPane[pane.id] ?? null}
                 isActive={effectiveActivePaneId === pane.id}
                 syncGroup={syncGroup}
+                poseStore={poseStore}
                 compareMode={compareMode}
                 isComparisonPane={pane.id === "secondary"}
                 onActivate={setActivePaneId}

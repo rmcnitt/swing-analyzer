@@ -81,6 +81,8 @@ export interface AnalysisPane {
   /** Kept when looping is switched off so it can be switched back on. */
   loop?: LoopRange;
   loopEnabled?: boolean;
+  /** Show the pose skeleton (once the clip has been analyzed). */
+  poseVisible?: boolean;
 }
 
 export type AnnotationGeometry =

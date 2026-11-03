@@ -16,6 +16,7 @@ import {
   SquareDashed,
   Minus,
   Pause,
+  PersonStanding,
   Play,
   Plus,
   Repeat,
@@ -43,6 +44,10 @@ import { getContainedStageSize, getVideoAspectRatio } from "@/lib/video-layout";
 import { clampPan, fitFraming, MAX_ZOOM, MIN_ZOOM } from "@/lib/analysis/framing";
 import { defaultLoop } from "@/lib/analysis/loop";
 import { GolferBoxEditor } from "@/components/analysis/golfer-box-editor";
+import { PoseOverlay } from "@/components/analysis/pose-overlay";
+import { drawSkeleton } from "@/lib/pose/draw-skeleton";
+import { frameIndexNear } from "@/lib/pose/landmarks";
+import type { PoseState, PoseStore } from "@/lib/pose/pose-store";
 import type {
   AnalysisPane,
   AnnotationObject,
@@ -71,6 +76,8 @@ interface VideoPaneProps {
   isActive: boolean;
   /** Shared playback coordinator; the pane registers its video and routes transport through it. */
   syncGroup: SyncGroup;
+  /** Pose tracks per clip (shared with the other pane and the workspace). */
+  poseStore: PoseStore;
   compareMode?: boolean;
   isComparisonPane?: boolean;
   onActivate: (paneId: PaneId) => void;
@@ -119,6 +126,7 @@ export function VideoPane({
   selectedAnnotationId,
   isActive,
   syncGroup,
+  poseStore,
   compareMode = false,
   isComparisonPane = false,
   onActivate,
@@ -200,6 +208,39 @@ export function VideoPane({
       : mediaError?.url === video.url
         ? mediaError.problem
         : null;
+  const poseState = useSyncExternalStore(
+    poseStore.subscribe,
+    () => poseStore.get(video?.id),
+    () => poseStore.get(undefined),
+  );
+  const poseTrack = poseState.status === "ready" ? poseState.track : undefined;
+  const showPose = Boolean(pane.poseVisible && poseTrack);
+
+  useEffect(() => {
+    if (video?.id && !playbackProblem) {
+      void poseStore.ensureLoaded(video.id);
+    }
+  }, [poseStore, video?.id, playbackProblem]);
+
+  const handlePoseButton = () => {
+    if (!video) {
+      return;
+    }
+
+    if (poseState.status === "analyzing") {
+      poseStore.cancel(video.id);
+      return;
+    }
+
+    if (poseState.status === "ready") {
+      onUpdatePane(pane.id, { poseVisible: !pane.poseVisible });
+      return;
+    }
+
+    onUpdatePane(pane.id, { poseVisible: true });
+    void poseStore.analyze({ id: video.id, url: video.url, fps: video.fps ?? DEFAULT_FPS });
+  };
+
   const [manualFraming, setManualFraming] = useState({ zoom: 1, pan: { x: 0, y: 0 } });
   const [boxMode, setBoxMode] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -347,6 +388,16 @@ export function VideoPane({
     }
 
     context.drawImage(element, 0, 0, canvas.width, canvas.height);
+
+    if (showPose && poseTrack) {
+      const index = frameIndexNear(poseTrack, element.currentTime);
+
+      if (index >= 0) {
+        // Line weights match the on-screen overlay relative to the frame.
+        const scale = stageSize.width > 0 ? canvas.width / stageSize.width : 1;
+        drawSkeleton(context, poseTrack, index, canvas.width, canvas.height, scale);
+      }
+    }
 
     if (pane.overlayVisible) {
       const overlay = overlayRendererRef.current?.(canvas.width);
@@ -784,6 +835,15 @@ export function VideoPane({
                   onEnded={() => syncGroup.onEnded(pane.id)}
                 />
 
+                {showPose && poseTrack ? (
+                  <PoseOverlay
+                    track={poseTrack}
+                    timeStore={timeStore}
+                    width={stageSize.width}
+                    height={stageSize.height}
+                  />
+                ) : null}
+
                 <AnnotationCanvas
                   key={`${pane.id}-${video.id}-${video.width ?? 0}x${video.height ?? 0}`}
                   paneId={pane.id}
@@ -880,6 +940,15 @@ export function VideoPane({
             >
               <Repeat className="size-4" />
             </button>
+
+            <PoseButton
+              status={poseState.status}
+              progress={poseState.progress}
+              error={poseState.error}
+              visible={showPose}
+              disabled={!video || Boolean(playbackProblem)}
+              onClick={handlePoseButton}
+            />
 
             <PlaybackTransport
               timeStore={timeStore}
@@ -990,5 +1059,55 @@ function PlaybackTransport({
         <span className="ml-1.5 text-[10px] opacity-70">F{frameIndexAt(currentTime, fps)}</span>
       </p>
     </>
+  );
+}
+
+function PoseButton({
+  status,
+  progress,
+  error,
+  visible,
+  disabled,
+  onClick,
+}: {
+  status: PoseState["status"];
+  progress: number;
+  error?: string;
+  visible: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const analyzing = status === "analyzing";
+  const checking = status === "unknown" || status === "checking";
+  const title = analyzing
+    ? "Analyzing pose… click to cancel"
+    : status === "ready"
+      ? visible
+        ? "Hide pose skeleton"
+        : "Show pose skeleton"
+      : status === "error"
+        ? `Pose analysis failed${error ? `: ${error}` : ""}. Click to retry.`
+        : "Analyze pose: detect the golfer's joints in every frame (runs in your browser)";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || checking}
+      aria-pressed={visible}
+      aria-label={analyzing ? "Cancel pose analysis" : visible ? "Hide pose" : "Show pose"}
+      title={title}
+      className={cn(
+        "flex h-8 shrink-0 items-center justify-center gap-1 border px-2 font-mono text-[11px] disabled:opacity-40 pointer-coarse:h-10",
+        visible || analyzing
+          ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/14 text-white"
+          : status === "error"
+            ? "border-red-500/60 text-red-300"
+            : "border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:border-white/25 hover:text-white",
+      )}
+    >
+      <PersonStanding className="size-4" />
+      {analyzing ? <span className="w-8 text-right">{Math.round(progress * 100)}%</span> : null}
+    </button>
   );
 }
