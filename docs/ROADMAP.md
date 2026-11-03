@@ -58,11 +58,22 @@ Follow-ups noticed (not done):
 - Reference clips' positions/golfer box are per session (positions) or per clip (box). Storing positions on reference videos would let users mark a pro clip once and reuse it in every session; Phase 3 auto-detection may make this moot.
 - Sync stays off for sessions that start with it off (e.g. samples) until toggled; consider auto-enabling when the first shared checkpoint is marked.
 
-## Phase 3 — Pose-estimation feature
-- In-browser MediaPipe Pose Landmarker (WASM, lazy-loaded only when toggled), run per-frame on demand / cached per video in IndexedDB.
-- Skeleton overlay toggle; live joint angles (spine tilt, lead-arm, knee flex).
-- Auto-detect key positions (address, top, impact) from wrist/hand trajectory → auto-create the position checkpoints that drive position-matched compare (Phase 2), so two swings line up with no manual marking.
-- Small chart of a tracked angle over time (hip/shoulder rotation proxy).
+## Phase 3 — Pose-estimation feature  _(in progress on branch `phase-3-pose`)_
+Built on a branch; merged to main only if kept. Pose data lives in its own IndexedDB database and new
+session fields are optional, so main keeps reading the same browser data either way.
+1. [x] **Pose engine + cache** (`lib/pose/`): MediaPipe Pose Landmarker (full model, pinned
+   `@mediapipe/tasks-vision@1.1.1`), lazy-loaded on first use, self-hosted (model in `public/mediapipe/`, wasm
+   copied from node_modules on dev/build). Every frame analyzed once; tracks cached per video.
+2. [x] **Skeleton overlay**: per-pane Pose button (analyze → toggle), drawn inside the zoom/pan transform,
+   included in PNG export. ← **checkpoint: review detection quality on real clips before continuing.**
+3. [ ] **Auto golfer box** from landmarks across the swing; "Fit" works without dragging (a drawn box wins).
+4. [ ] **Auto swing positions** (Address/Top/Impact/Finish) from the hand path → suggested checkpoints; auto-enable
+   sync once both panes share positions. Pure detection in `lib/analysis/`, tested on recorded landmark fixtures.
+5. [ ] **Joint angles** (spine tilt, lead arm, knee flex) from world landmarks, labelled approximate.
+6. [ ] _(optional)_ Angle-over-time chart.
+
+Notes: analysis took ~60 ms/frame in headless Chrome (~20 s for a 5 s 60 fps clip); measure on real hardware.
+The sample session's down-the-line Top/Impact marks are ~0.25 s early (seed data); step 4 should replace them.
 
 ## Phase 4 — Ship it
 - Landing/first-run: hub explains in one line, "Try the sample swing" + "Upload your swing" CTAs; privacy note ("videos never leave your browser").
