@@ -83,7 +83,7 @@ export interface AnalysisPane {
   loopEnabled?: boolean;
   /** Show the pose skeleton (once the clip has been analyzed). */
   poseVisible?: boolean;
-  /** Clip whose detected swing positions were already added, so they're added only once. */
+  /** "<videoId>@<detection version>" once that clip's detected positions were added. */
   autoPositionsFor?: string;
 }
 

@@ -68,7 +68,12 @@ import { SyncGroup } from "@/lib/analysis/sync-group";
 import { loadPoseTrack, savePoseTrack } from "@/lib/pose/pose-cache";
 import { analyzeVideo } from "@/lib/pose/pose-engine";
 import { createPoseStore } from "@/lib/pose/pose-store";
-import { addDetectedPositions, applyAutoPositions, detectedPositionKeys } from "@/lib/pose/auto-positions";
+import {
+  addDetectedPositions,
+  applyAutoPositions,
+  autoPositionsKey,
+  detectedPositionKeys,
+} from "@/lib/pose/auto-positions";
 import { cleanTrack } from "@/lib/pose/clean-track";
 import { autoGolferBox, autoSwingPositions } from "@/lib/pose/derived";
 import type { PlaybackProblem } from "@/lib/video/playback-errors";
@@ -317,7 +322,7 @@ function WorkspaceView({
     const merged = { ...video, ...videoMetadataById[video.id] };
     const track = poseStore.get(video.id).track;
     // A box the user drew wins; otherwise frame the golfer the pose found.
-    const autoBox = !merged.golferBox && track ? autoGolferBox(track) : null;
+    const autoBox = !merged.golferBox && track ? autoGolferBox(track, merged) : null;
     return autoBox ? { ...merged, golferBox: autoBox } : merged;
   });
   const allVideos = videos;
@@ -653,7 +658,7 @@ function WorkspaceView({
     const pending = session.panes.some(
       (pane) =>
         pane.videoId &&
-        pane.autoPositionsFor !== pane.videoId &&
+        pane.autoPositionsFor !== autoPositionsKey(pane.videoId) &&
         poseStore.get(pane.videoId).status === "ready",
     );
 

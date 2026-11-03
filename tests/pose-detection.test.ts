@@ -16,12 +16,12 @@ import { loadPoseFixture } from "@/tests/helpers/pose-fixtures";
 const PORTRAIT = 720 / 1280;
 
 /**
- * Hand-labelled from the sample clips' frames (seconds). Address is "still, before the hands
- * start back", so any frame in its range is right.
+ * Hand-labelled from the sample clips' frames (seconds), with the user's review: Address must be
+ * before the clubhead starts back (any settled frame is right), Finish once the body has stopped.
  */
 const truth = {
-  "sample-video-face-on": { Address: [1.4, 1.88], Top: 2.52, Impact: 2.78, Finish: [2.95, 3.4] },
-  "sample-video-down-the-line": { Address: [0.9, 1.3], Top: 1.84, Impact: 2.085, Finish: [2.4, 2.8] },
+  "sample-video-face-on": { Address: [1.4, 1.7], Top: 2.52, Impact: 2.78, Finish: [3.3, 3.6] },
+  "sample-video-down-the-line": { Address: [0.8, 1.1], Top: 1.84, Impact: 2.085, Finish: [2.7, 2.95] },
 } as const;
 
 describe("detectSwingPositions on recorded sample swings", () => {
@@ -168,8 +168,19 @@ describe("golferBoxFromTrack", () => {
     expect(box.y + box.height).toBeGreaterThan(0.6);
   });
 
+  it("leaves room for the club around the hands", () => {
+    const track = syntheticTrack(frames(10), (time, landmark) =>
+      landmark === LM.leftWrist || landmark === LM.rightWrist ? { x: 0.5, y: 0.3 } : standing(landmark),
+    );
+    const box = golferBoxFromTrack(track)!;
+
+    // Body height 0.3 → club reach ~0.2 above hands at 0.3 (above the head top at ~0.205).
+    expect(box.y).toBeLessThan(0.15);
+    expect(box.x).toBeLessThan(0.35);
+  });
+
   it("frames the sample golfer and ignores frames with no pose", () => {
-    const box = golferBoxFromTrack(loadPoseFixture("sample-video-down-the-line"))!;
+    const box = golferBoxFromTrack(loadPoseFixture("sample-video-down-the-line"), PORTRAIT)!;
 
     expect(box.width).toBeGreaterThan(0.2);
     expect(box.height).toBeGreaterThan(0.3);

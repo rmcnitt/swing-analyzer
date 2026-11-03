@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { addDetectedPositions, applyAutoPositions, detectedPositionKeys } from "@/lib/pose/auto-positions";
+import {
+  addDetectedPositions,
+  applyAutoPositions,
+  autoPositionsKey,
+  detectedPositionKeys,
+} from "@/lib/pose/auto-positions";
 import type { AnalysisSession, SnapshotMarker } from "@/lib/types";
 
 let counter = 0;
@@ -64,10 +69,25 @@ describe("applyAutoPositions", () => {
   it("applies once per clip, even when no swing is found", () => {
     const next = applyAutoPositions(session(), (videoId) => (videoId === "a" ? null : undefined), createId);
 
-    expect(next.panes[0].autoPositionsFor).toBe("a");
+    expect(next.panes[0].autoPositionsFor).toBe(autoPositionsKey("a"));
     expect(next.panes[1].autoPositionsFor).toBeUndefined();
     expect(next.snapshotMarkers).toEqual([]);
-    expect(applyAutoPositions(next, () => detected, createId).panes[0].autoPositionsFor).toBe("a");
+    expect(applyAutoPositions(next, () => detected, createId).snapshotMarkers).toHaveLength(4);
+  });
+
+  it("re-detects after a detection update, keeping the user's own marks", () => {
+    const old: SnapshotMarker = { id: "o", paneId: "primary", videoId: "a", label: "Finish", time: 3, source: "pose" };
+    const current = session({
+      snapshotMarkers: [manualTop, old],
+      panes: session().panes.map((pane) => ({ ...pane, autoPositionsFor: `${pane.videoId}@1` })),
+    });
+
+    const next = applyAutoPositions(current, (videoId) => (videoId === "a" ? detected : null), createId);
+    const labels = (label: string) => next.snapshotMarkers.filter((marker) => marker.label === label);
+
+    expect(labels("Top")).toEqual([manualTop]);
+    expect(labels("Finish")).toEqual([expect.objectContaining({ time: 3.2, source: "pose" })]);
+    expect(next.panes[0].autoPositionsFor).toBe(autoPositionsKey("a"));
   });
 
   it("turns sync on when both swings get shared positions", () => {

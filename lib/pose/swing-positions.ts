@@ -12,11 +12,19 @@ export type DetectedLabel = keyof DetectedPositions;
 
 /**
  * Hands count as still below these fractions of their peak (downswing) speed. Address is strict
- * so a slow takeaway or forward press isn't mistaken for the setup; the finish is a settling
- * pose, not a dead stop.
+ * so a slow takeaway or forward press isn't mistaken for the setup.
  */
 const ADDRESS_STILL = 0.03;
-const FINISH_STILL = 0.12;
+const FINISH_STILL = 0.06;
+/**
+ * The clubhead starts back before the hands visibly move, so Address is taken this far (seconds)
+ * before the hands' first movement, while they're still settled.
+ */
+const ADDRESS_LEAD = 0.3;
+/** The hands count as settled once they've stayed still this long. */
+const FINISH_HOLD = 0.12;
+/** The club keeps settling behind the head after the hands stop; the finish is this much later. */
+const FINISH_LAG = 0.25;
 /** The swing must move the hands at least this many body-heights vertically. */
 const MIN_HAND_TRAVEL = 0.3;
 
@@ -182,6 +190,16 @@ export function detectSwingPositions(track: PoseTrack, aspect = 1): DetectedPosi
   }
 
   if (speed[address] <= addressStill) {
+    const takeaway = times[address];
+
+    while (
+      address > 0 &&
+      speed[address - 1] <= addressStill &&
+      takeaway - times[address - 1] <= ADDRESS_LEAD
+    ) {
+      address -= 1;
+    }
+
     result.Address = times[address];
   }
 
@@ -191,21 +209,39 @@ export function detectSwingPositions(track: PoseTrack, aspect = 1): DetectedPosi
 
   result.Impact = times[impact];
 
-  // Finish: once the hands have risen at least halfway back up, the first still frame.
+  // Finish: once the hands have risen at least halfway back up, the start of the first stretch
+  // where they stay still.
   if (impact < n - 1) {
     const high = argBy(impact + 1, n - 1, (i) => -y[i]);
     const risen = y[impact] - (y[impact] - y[high]) * 0.5;
     let finish = -1;
 
-    for (let i = impact + 1; i < n; i += 1) {
-      if (y[i] <= risen && speed[i] <= finishStill) {
+    for (let i = impact + 1; i < n && finish < 0; i += 1) {
+      if (y[i] > risen || speed[i] > finishStill) {
+        continue;
+      }
+
+      let j = i;
+
+      while (j + 1 < n && speed[j + 1] <= finishStill && times[j + 1] - times[i] < FINISH_HOLD) {
+        j += 1;
+      }
+
+      if (times[j] - times[i] >= FINISH_HOLD - spacing * 1.5) {
         finish = i;
-        break;
       }
     }
 
     if (y[impact] - y[high] >= travel * 0.5) {
-      result.Finish = times[finish >= 0 ? finish : high];
+      let at = finish >= 0 ? finish : high;
+      const settled = times[at];
+
+      // Step forward by the lag while the hands stay up in the finish.
+      while (at + 1 < n && times[at + 1] - settled <= FINISH_LAG && y[at + 1] <= risen) {
+        at += 1;
+      }
+
+      result.Finish = times[at];
     }
   }
 

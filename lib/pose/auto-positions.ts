@@ -7,9 +7,18 @@ import type { AnalysisSession, PaneId, SnapshotMarker } from "@/lib/types";
 const AUTO_SYNC_MIN_CHECKPOINTS = 2;
 
 /**
+ * Bump when detection changes: clips detected with an older version are re-detected, and the
+ * marks detection placed (never the user's own) are updated.
+ */
+export const DETECTION_VERSION = 2;
+
+/** What `AnalysisPane.autoPositionsFor` holds once a clip's positions were detected. */
+export const autoPositionsKey = (videoId: string) => `${videoId}@${DETECTION_VERSION}`;
+
+/**
  * Adds detected positions to a pane's clip as markers tagged `source: "pose"`. By default only
- * positions not yet marked are filled in, so the user's own marks always win; `overwrite`
- * replaces them (the "Auto" button).
+ * positions that are unmarked or were themselves detected are set, so the user's own marks
+ * always win; `overwrite` replaces those too (the "Auto" button).
  */
 export function addDetectedPositions(
   markers: SnapshotMarker[],
@@ -17,12 +26,17 @@ export function addDetectedPositions(
   detected: DetectedPositions,
   { overwrite = false, createId }: { overwrite?: boolean; createId: () => string },
 ) {
-  const marked = positionTimes(paneMarkers(markers, pane));
+  const current = paneMarkers(markers, pane);
+  const marked = positionTimes(current);
+  const detectedKeys = detectedPositionKeys(current);
   let next = markers;
   let added = 0;
 
   for (const [label, time] of Object.entries(detected)) {
-    if (time === undefined || (!overwrite && marked.has(positionKey(label)))) {
+    const key = positionKey(label);
+    const markedByHand = marked.has(key) && !detectedKeys.has(key);
+
+    if (time === undefined || (!overwrite && markedByHand)) {
       continue;
     }
 
@@ -55,7 +69,7 @@ export function applyAutoPositions(
   let changed = false;
 
   const panes = session.panes.map((pane) => {
-    if (!pane.videoId || pane.autoPositionsFor === pane.videoId) {
+    if (!pane.videoId || pane.autoPositionsFor === autoPositionsKey(pane.videoId)) {
       return pane;
     }
 
@@ -75,7 +89,7 @@ export function applyAutoPositions(
       added += result.added;
     }
 
-    return { ...pane, autoPositionsFor: pane.videoId };
+    return { ...pane, autoPositionsFor: autoPositionsKey(pane.videoId) };
   });
 
   if (!changed) {

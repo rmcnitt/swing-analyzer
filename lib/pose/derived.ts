@@ -7,9 +7,12 @@ import type { NormalizedRect, VideoAsset } from "@/lib/types";
 const boxes = new WeakMap<PoseTrack, NormalizedRect | null>();
 const positions = new WeakMap<PoseTrack, DetectedPositions | null>();
 
-export function autoGolferBox(track: PoseTrack) {
+const aspectOf = (video?: Pick<VideoAsset, "width" | "height">) =>
+  video?.width && video?.height ? video.width / video.height : 1;
+
+export function autoGolferBox(track: PoseTrack, video?: Pick<VideoAsset, "width" | "height">) {
   if (!boxes.has(track)) {
-    boxes.set(track, golferBoxFromTrack(track));
+    boxes.set(track, golferBoxFromTrack(track, aspectOf(video)));
   }
 
   return boxes.get(track) ?? null;
@@ -17,8 +20,7 @@ export function autoGolferBox(track: PoseTrack) {
 
 export function autoSwingPositions(track: PoseTrack, video?: Pick<VideoAsset, "width" | "height">) {
   if (!positions.has(track)) {
-    const aspect = video?.width && video?.height ? video.width / video.height : 1;
-    positions.set(track, detectSwingPositions(track, aspect));
+    positions.set(track, detectSwingPositions(track, aspectOf(video)));
   }
 
   return positions.get(track) ?? null;
