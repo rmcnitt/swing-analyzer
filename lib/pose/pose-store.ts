@@ -26,6 +26,8 @@ export interface PoseStoreDeps {
     signal: AbortSignal;
     onProgress: (fraction: number) => void;
   }) => Promise<PoseTrack>;
+  /** Turns a raw (stored) track into the one shown and analyzed, e.g. cleaned up. */
+  prepare?: (track: PoseTrack) => PoseTrack;
 }
 
 const UNKNOWN: PoseState = { status: "unknown", progress: 0 };
@@ -46,6 +48,7 @@ export function createPoseStore(deps: PoseStoreDeps) {
     listeners.forEach((listener) => listener());
   };
 
+  const prepare = deps.prepare ?? ((track: PoseTrack) => track);
   const get = (videoId: string | undefined) => (videoId ? (states.get(videoId) ?? UNKNOWN) : UNKNOWN);
 
   return {
@@ -70,7 +73,10 @@ export function createPoseStore(deps: PoseStoreDeps) {
 
       // Analysis may have started (or finished) while the cache was being read.
       if (get(videoId).status === "checking") {
-        set(videoId, track ? { status: "ready", progress: 1, track } : { status: "none", progress: 0 });
+        set(
+          videoId,
+          track ? { status: "ready", progress: 1, track: prepare(track) } : { status: "none", progress: 0 },
+        );
       }
     },
 
@@ -98,7 +104,7 @@ export function createPoseStore(deps: PoseStoreDeps) {
             }
           },
         });
-        set(clip.id, { status: "ready", progress: 1, track });
+        set(clip.id, { status: "ready", progress: 1, track: prepare(track) });
         await deps.save(track).catch(() => undefined);
       } catch (error) {
         const cancelled = error instanceof DOMException && error.name === "AbortError";

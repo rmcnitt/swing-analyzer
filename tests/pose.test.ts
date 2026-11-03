@@ -168,3 +168,22 @@ describe("createPoseStore", () => {
     expect(store.get("clip").status).toBe("ready");
   });
 });
+
+describe("createPoseStore prepare", () => {
+  it("shows the prepared track but saves the raw one", async () => {
+    const raw = makeTrack([0.1]);
+    const prepared = makeTrack([0.2]);
+    const save = vi.fn(async () => undefined);
+    const store = createPoseStore({
+      load: async () => null,
+      save,
+      analyze: async () => raw,
+      prepare: () => prepared,
+    });
+
+    await store.analyze({ id: "clip", url: "blob:clip", fps: 30 });
+
+    expect(store.get("clip").track).toBe(prepared);
+    expect(save).toHaveBeenCalledWith(raw);
+  });
+});

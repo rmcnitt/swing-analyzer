@@ -100,6 +100,7 @@ export const markerSchema = z.object({
   label: z.string(),
   time: z.number().min(0),
   notes: z.string().optional(),
+  source: z.literal("pose").optional(),
 });
 
 export const sessionSchema = z.object({
@@ -126,6 +127,7 @@ export const sessionSchema = z.object({
       loop: z.object({ start: z.number().min(0), end: z.number().min(0) }).optional(),
       loopEnabled: z.boolean().optional(),
       poseVisible: z.boolean().optional(),
+      autoPositionsFor: z.string().optional(),
     }),
   ),
   annotations: z.object({

@@ -83,6 +83,8 @@ export interface AnalysisPane {
   loopEnabled?: boolean;
   /** Show the pose skeleton (once the clip has been analyzed). */
   poseVisible?: boolean;
+  /** Clip whose detected swing positions were already added, so they're added only once. */
+  autoPositionsFor?: string;
 }
 
 export type AnnotationGeometry =
@@ -131,6 +133,8 @@ export interface SnapshotMarker {
   label: string;
   time: number;
   notes?: string;
+  /** "pose": placed by swing-position detection rather than by hand. */
+  source?: "pose";
 }
 
 export interface UserNote {
