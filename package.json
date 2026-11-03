@@ -3,8 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/copy-mediapipe-wasm.mjs",
     "dev": "next dev",
     "local": "./scripts/dev-local.sh",
+    "prebuild": "node scripts/copy-mediapipe-wasm.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
@@ -13,6 +15,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "1.1.1",
     "clsx": "^2.1.1",
     "konva": "^10.2.3",
     "lucide-react": "^1.7.0",

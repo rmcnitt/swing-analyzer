@@ -7,6 +7,7 @@ import {
   videosOrphanedBySessionDelete,
 } from "@/lib/storage/library-cleanup";
 import { salvageSession } from "@/lib/storage/session-salvage";
+import { deletePoseTracks } from "@/lib/pose/pose-cache";
 import { videoSchema } from "@/lib/validation";
 
 const dbName = "swing-analyzer-local-library";
@@ -316,6 +317,8 @@ export async function deleteStoredSession(sessionId: string) {
     ? videosOrphanedBySessionDelete(session, sessions, videos)
     : [];
 
+  void deletePoseTracks(orphanedVideoIds);
+
   return runTransaction(allDataStores, (stores) => {
     stores[sessionStoreName].delete(sessionId);
 
@@ -333,6 +336,7 @@ export async function deleteStoredSession(sessionId: string) {
  */
 export async function deleteStoredVideo(videoId: string) {
   const plan = planVideoDeletion(videoId, await loadStoredSessions());
+  void deletePoseTracks([videoId]);
 
   return runTransaction(allDataStores, (stores) => {
     stores[videoStoreName].delete(videoId);

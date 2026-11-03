@@ -48,3 +48,6 @@ next-env.d.ts
 
 # raw source clips for scripts/prepare-sample.sh (not committed)
 /raw-samples/
+
+# MediaPipe wasm runtime, copied from node_modules by scripts/copy-mediapipe-wasm.mjs
+/public/mediapipe/wasm/
