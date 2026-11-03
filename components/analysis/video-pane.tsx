@@ -69,6 +69,11 @@ interface VideoPaneProps {
   markers: SnapshotMarker[];
   /** Marked time per swing position (by position key) for this pane's clip. */
   positions: ReadonlyMap<string, number>;
+  /** Position keys placed by detection rather than by hand. */
+  detectedPositions: ReadonlySet<string>;
+  /** Pose found a swing in this clip, so positions can be detected. */
+  canAutoDetect: boolean;
+  onAutoPositions: () => void;
   activeTool: AnnotationTool;
   activeColor: HexColor;
   strokeWidth: number;
@@ -120,6 +125,9 @@ export function VideoPane({
   annotations,
   markers,
   positions,
+  detectedPositions,
+  canAutoDetect,
+  onAutoPositions,
   activeTool,
   activeColor,
   strokeWidth,
@@ -999,6 +1007,9 @@ export function VideoPane({
               timeStore={timeStore}
               fps={video.fps}
               positions={positions}
+              detected={detectedPositions}
+              canAutoDetect={canAutoDetect}
+              onAutoDetect={onAutoPositions}
               onJump={(label) => onJumpToPosition(pane.id, label)}
               onMark={(label) =>
                 onMarkPosition(pane.id, label, videoRef.current?.currentTime ?? timeStore.get())

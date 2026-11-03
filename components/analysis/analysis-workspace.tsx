@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { startTransition } from "react";
 import {
   Columns2,
@@ -60,6 +68,9 @@ import { SyncGroup } from "@/lib/analysis/sync-group";
 import { loadPoseTrack, savePoseTrack } from "@/lib/pose/pose-cache";
 import { analyzeVideo } from "@/lib/pose/pose-engine";
 import { createPoseStore } from "@/lib/pose/pose-store";
+import { addDetectedPositions, applyAutoPositions, detectedPositionKeys } from "@/lib/pose/auto-positions";
+import { cleanTrack } from "@/lib/pose/clean-track";
+import { autoGolferBox, autoSwingPositions } from "@/lib/pose/derived";
 import type { PlaybackProblem } from "@/lib/video/playback-errors";
 import { createVideoThumbnail, detectVideoFps, readVideoMetadata, type VideoFileMetadata } from "@/lib/video/media";
 
@@ -213,8 +224,15 @@ function WorkspaceView({
   const [redoStack, setRedoStack] = useState<Array<Record<PaneId, AnnotationObject[]>>>([]);
   const [syncGroup] = useState(() => new SyncGroup());
   const [poseStore] = useState(() =>
-    createPoseStore({ load: loadPoseTrack, save: savePoseTrack, analyze: analyzeVideo }),
+    createPoseStore({
+      load: loadPoseTrack,
+      save: savePoseTrack,
+      analyze: analyzeVideo,
+      prepare: cleanTrack,
+    }),
   );
+  // Re-render when any clip's pose changes (auto golfer box and positions derive from it).
+  useSyncExternalStore(poseStore.subscribe, poseStore.getVersion, () => 0);
 
   useEffect(() => () => poseStore.cancelAll(), [poseStore]);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
@@ -295,10 +313,13 @@ function WorkspaceView({
     return () => window.clearTimeout(timeout);
   }, [session]);
 
-  const videos = uniqueById([...storedVideos, ...initialVideos]).map((video) => ({
-    ...video,
-    ...videoMetadataById[video.id],
-  }));
+  const videos = uniqueById([...storedVideos, ...initialVideos]).map((video) => {
+    const merged = { ...video, ...videoMetadataById[video.id] };
+    const track = poseStore.get(video.id).track;
+    // A box the user drew wins; otherwise frame the golfer the pose found.
+    const autoBox = !merged.golferBox && track ? autoGolferBox(track) : null;
+    return autoBox ? { ...merged, golferBox: autoBox } : merged;
+  });
   const allVideos = videos;
   const references = allVideos.filter((video) => video.sourceType === "reference");
   const getVideo = (videoId?: string) => allVideos.find((video) => video.id === videoId);
@@ -619,6 +640,49 @@ function WorkspaceView({
     // Apply right away; the stored copy catches up on reload.
     handleVideoMetadata(videoId, { golferBox });
     void updateStoredVideoMetadata(videoId, { golferBox });
+  };
+
+  /** Detected positions for a clip: undefined until its pose is ready, null if no swing found. */
+  const detectPositions = (videoId: string) => {
+    const track = poseStore.get(videoId).track;
+    return track ? autoSwingPositions(track, getVideo(videoId)) : undefined;
+  };
+
+  // Once a clip's pose is ready, fill in any positions not marked yet (once per clip and pane).
+  const applyPendingAutoPositions = useEffectEvent(() => {
+    const pending = session.panes.some(
+      (pane) =>
+        pane.videoId &&
+        pane.autoPositionsFor !== pane.videoId &&
+        poseStore.get(pane.videoId).status === "ready",
+    );
+
+    if (pending) {
+      setSession((current) => applyAutoPositions(current, detectPositions, () => createId("marker")));
+    }
+  });
+  const poseVersion = poseStore.getVersion();
+
+  useEffect(() => {
+    applyPendingAutoPositions();
+  }, [poseVersion, session.panes]);
+
+  /** "Auto": replace this pane's positions with the detected ones. */
+  const handleAutoPositions = (paneId: PaneId) => {
+    const videoId = session.panes.find((pane) => pane.id === paneId)?.videoId;
+    const detected = videoId ? detectPositions(videoId) : undefined;
+
+    if (!videoId || !detected) {
+      return;
+    }
+
+    setSession((current) => ({
+      ...current,
+      snapshotMarkers: addDetectedPositions(current.snapshotMarkers, { id: paneId, videoId }, detected, {
+        overwrite: true,
+        createId: () => createId("marker"),
+      }).markers,
+    }));
   };
 
   const handleFitBoth = () => {
@@ -950,6 +1014,9 @@ function WorkspaceView({
                 annotations={session.annotations[pane.id]}
                 markers={markersByPane[pane.id]}
                 positions={positionsByPane[pane.id]}
+                detectedPositions={detectedPositionKeys(markersByPane[pane.id])}
+                canAutoDetect={Boolean(pane.videoId && detectPositions(pane.videoId))}
+                onAutoPositions={() => handleAutoPositions(pane.id)}
                 activeTool={activeTool}
                 activeColor={activeColor}
                 strokeWidth={strokeWidth}

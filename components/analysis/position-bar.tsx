@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import { Crosshair } from "lucide-react";
+import { Crosshair, WandSparkles } from "lucide-react";
 import { frameIndexAt } from "@/lib/analysis/frames";
 import { positionKey, SWING_POSITIONS } from "@/lib/analysis/positions";
 import type { TimeStore } from "@/lib/video/time-store";
@@ -12,6 +12,10 @@ interface PositionBarProps {
   fps?: number;
   /** Marked time per position key in this pane's clip. */
   positions: ReadonlyMap<string, number>;
+  /** Position keys that were detected from the pose rather than marked by hand. */
+  detected: ReadonlySet<string>;
+  canAutoDetect: boolean;
+  onAutoDetect: () => void;
   onJump: (label: string) => void;
   onMark: (label: string) => void;
 }
@@ -20,7 +24,16 @@ interface PositionBarProps {
  * One-click swing positions for a pane. An unmarked position is set at the current frame; a
  * marked one jumps there. "Set" re-marks the next position clicked at the current frame.
  */
-export function PositionBar({ timeStore, fps, positions, onJump, onMark }: PositionBarProps) {
+export function PositionBar({
+  timeStore,
+  fps,
+  positions,
+  detected,
+  canAutoDetect,
+  onAutoDetect,
+  onJump,
+  onMark,
+}: PositionBarProps) {
   const currentTime = useSyncExternalStore(timeStore.subscribe, timeStore.get, () => 0);
   const [markMode, setMarkMode] = useState(false);
   const currentFrame = frameIndexAt(currentTime, fps);
@@ -48,6 +61,7 @@ export function PositionBar({ timeStore, fps, positions, onJump, onMark }: Posit
         const time = positions.get(positionKey(label));
         const isSet = time !== undefined;
         const isHere = isSet && frameIndexAt(time, fps) === currentFrame;
+        const isDetected = isSet && detected.has(positionKey(label));
 
         return (
           <button
@@ -64,7 +78,7 @@ export function PositionBar({ timeStore, fps, positions, onJump, onMark }: Posit
             title={
               markMode || !isSet
                 ? `Mark ${label} at this frame`
-                : `Jump to ${label} (${formatTimecode(time)})`
+                : `Jump to ${label} (${formatTimecode(time)})${isDetected ? " · detected from pose; Set to re-mark" : ""}`
             }
             className={cn(
               "h-7 shrink-0 border px-2 text-[11px] transition pointer-coarse:h-9",
@@ -77,10 +91,25 @@ export function PositionBar({ timeStore, fps, positions, onJump, onMark }: Posit
                     : "border-dashed border-white/12 text-[color:var(--color-muted)] hover:border-white/30 hover:text-white",
             )}
           >
+            {isDetected ? (
+              <WandSparkles className="mr-1 inline size-3 align-[-2px] text-[color:var(--color-accent)]" aria-label="detected" />
+            ) : null}
             {label}
           </button>
         );
       })}
+
+      {canAutoDetect ? (
+        <button
+          type="button"
+          onClick={onAutoDetect}
+          title="Detect Address, Top, Impact and Finish from the pose (replaces those marks)"
+          className="flex h-7 shrink-0 items-center gap-1 border border-[color:var(--color-border)] px-1.5 text-[11px] text-[color:var(--color-muted)] hover:border-white/25 hover:text-white pointer-coarse:h-9"
+        >
+          <WandSparkles className="size-3.5" />
+          Auto
+        </button>
+      ) : null}
     </div>
   );
 }
