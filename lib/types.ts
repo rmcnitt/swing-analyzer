@@ -85,6 +85,10 @@ export interface AnalysisPane {
   poseVisible?: boolean;
   /** "<videoId>@<detection version>" once that clip's detected positions were added. */
   autoPositionsFor?: string;
+  /** Show the Swing check box (tempo, head movement) and its traces. */
+  swingCheck?: boolean;
+  hideHandPath?: boolean;
+  hideHeadTrace?: boolean;
 }
 
 export type AnnotationGeometry =

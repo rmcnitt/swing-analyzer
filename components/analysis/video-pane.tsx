@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -10,6 +11,7 @@ import {
 } from "react";
 import {
   Check,
+  Gauge,
   Pencil,
   Maximize2,
   ScanSearch,
@@ -48,6 +50,10 @@ import { PoseOverlay } from "@/components/analysis/pose-overlay";
 import { drawSkeleton } from "@/lib/pose/draw-skeleton";
 import { frameIndexNear } from "@/lib/pose/landmarks";
 import type { PoseState, PoseStore } from "@/lib/pose/pose-store";
+import { SwingCheckCard, SwingTraceOverlay, type SwingCheckData } from "@/components/analysis/swing-check";
+import { aspectOf, autoSwingPhases } from "@/lib/pose/derived";
+import { drawSwingTraces } from "@/lib/pose/draw-traces";
+import { buildSwingTraces, headMovement, swingTempo } from "@/lib/pose/swing-check";
 import type {
   AnalysisPane,
   AnnotationObject,
@@ -230,6 +236,56 @@ export function VideoPane({
     }
   }, [poseStore, video?.id, playbackProblem]);
 
+  const swingCheckOn = Boolean(pane.swingCheck && video && !playbackProblem);
+  const traceVisibility = { hands: !pane.hideHandPath, head: !pane.hideHeadTrace };
+  const addressTime = positions.get("address");
+  const topTime = positions.get("top");
+  const impactTime = positions.get("impact");
+  const finishTime = positions.get("finish");
+  const frameWidth = video?.width;
+  const frameHeight = video?.height;
+
+  // Marked positions (the user's own or detected) drive the numbers; the takeaway start comes
+  // from detection because Address is deliberately placed before it.
+  const swingCheck = useMemo(() => {
+    if (!swingCheckOn || !poseTrack) {
+      return null;
+    }
+
+    const frame = { width: frameWidth, height: frameHeight };
+    const phases = autoSwingPhases(poseTrack, frame);
+    const times = { address: addressTime, top: topTime, impact: impactTime, finish: finishTime };
+    const data: SwingCheckData = {
+      tempo: swingTempo({ start: phases?.motionStart, top: topTime, impact: impactTime }),
+      head: headMovement(poseTrack, times, aspectOf(frame)),
+      noSwing: !phases,
+    };
+
+    return { data, traces: buildSwingTraces(poseTrack, times, aspectOf(frame)) };
+  }, [swingCheckOn, poseTrack, frameWidth, frameHeight, addressTime, topTime, impactTime, finishTime]);
+
+  const analyzePose = () => {
+    if (video) {
+      void poseStore.analyze({ id: video.id, url: video.url, fps: video.fps ?? DEFAULT_FPS });
+    }
+  };
+
+  const toggleSwingCheck = () => onUpdatePane(pane.id, { swingCheck: !pane.swingCheck });
+
+  // With the Swing check open, a clip that hasn't been analyzed is analyzed right away (also when
+  // the click lands while the cache is still being checked, or a new clip is loaded). Not after an
+  // error: the card offers a retry instead.
+  const needsAnalysis = swingCheckOn && poseState.status === "none";
+  const videoId = video?.id;
+  const videoUrl = video?.url;
+  const videoFps = video?.fps;
+
+  useEffect(() => {
+    if (needsAnalysis && videoId && videoUrl) {
+      void poseStore.analyze({ id: videoId, url: videoUrl, fps: videoFps ?? DEFAULT_FPS });
+    }
+  }, [needsAnalysis, poseStore, videoId, videoUrl, videoFps]);
+
   const handlePoseButton = () => {
     if (!video) {
       return;
@@ -246,7 +302,7 @@ export function VideoPane({
     }
 
     onUpdatePane(pane.id, { poseVisible: true });
-    void poseStore.analyze({ id: video.id, url: video.url, fps: video.fps ?? DEFAULT_FPS });
+    analyzePose();
   };
 
   const [manualFraming, setManualFraming] = useState({ zoom: 1, pan: { x: 0, y: 0 } });
@@ -405,6 +461,11 @@ export function VideoPane({
         const scale = stageSize.width > 0 ? canvas.width / stageSize.width : 1;
         drawSkeleton(context, poseTrack, index, canvas.width, canvas.height, scale);
       }
+    }
+
+    if (swingCheck) {
+      const scale = stageSize.width > 0 ? canvas.width / stageSize.width : 1;
+      drawSwingTraces(context, swingCheck.traces, traceVisibility, canvas.width, canvas.height, scale);
     }
 
     if (pane.overlayVisible) {
@@ -852,6 +913,15 @@ export function VideoPane({
                   />
                 ) : null}
 
+                {swingCheck ? (
+                  <SwingTraceOverlay
+                    traces={swingCheck.traces}
+                    visible={traceVisibility}
+                    width={stageSize.width}
+                    height={stageSize.height}
+                  />
+                ) : null}
+
                 <AnnotationCanvas
                   key={`${pane.id}-${video.id}-${video.width ?? 0}x${video.height ?? 0}`}
                   paneId={pane.id}
@@ -878,6 +948,24 @@ export function VideoPane({
                   />
                 ) : null}
               </div>
+
+              {swingCheckOn ? (
+                <SwingCheckCard
+                  pose={poseState}
+                  data={swingCheck?.data ?? null}
+                  visible={traceVisibility}
+                  onToggle={(trace) =>
+                    onUpdatePane(
+                      pane.id,
+                      trace === "hands"
+                        ? { hideHandPath: !pane.hideHandPath }
+                        : { hideHeadTrace: !pane.hideHeadTrace },
+                    )
+                  }
+                  onAnalyze={analyzePose}
+                  onClose={() => onUpdatePane(pane.id, { swingCheck: false })}
+                />
+              ) : null}
 
               {selectedAnnotation && isActive && activeTool === "select" && pane.overlayVisible ? (
                 <ShapeLabelEditor
@@ -947,6 +1035,23 @@ export function VideoPane({
               title={loop ? "Stop looping (R)" : "Loop a range (R); drag the in/out handles or press [ and ]"}
             >
               <Repeat className="size-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={toggleSwingCheck}
+              disabled={!video || Boolean(playbackProblem)}
+              aria-pressed={swingCheckOn}
+              className={cn(
+                "flex size-8 shrink-0 items-center justify-center border disabled:opacity-40 pointer-coarse:size-10",
+                swingCheckOn
+                  ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/14 text-white"
+                  : "border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:border-white/25 hover:text-white",
+              )}
+              aria-label={swingCheckOn ? "Hide swing check" : "Swing check"}
+              title="Swing check: tempo, hand path and head movement"
+            >
+              <Gauge className="size-4" />
             </button>
 
             <PoseButton
