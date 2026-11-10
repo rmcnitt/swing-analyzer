@@ -10,6 +10,12 @@ export interface DetectedPositions {
 
 export type DetectedLabel = keyof DetectedPositions;
 
+/** Detected positions plus timing that isn't a position. */
+export interface SwingPhases extends DetectedPositions {
+  /** When the hands first move (the takeaway starts); Address is set a little before this. */
+  motionStart?: number;
+}
+
 /**
  * Hands count as still below these fractions of their peak (downswing) speed. Address is strict
  * so a slow takeaway or forward press isn't mistaken for the setup.
@@ -131,6 +137,20 @@ const argBy = (from: number, to: number, score: (i: number) => number) => {
  * Works on image coordinates (y grows downward). `aspect` is the frame's width / height.
  */
 export function detectSwingPositions(track: PoseTrack, aspect = 1): DetectedPositions | null {
+  const phases = detectSwingPhases(track, aspect);
+
+  if (!phases) {
+    return null;
+  }
+
+  const { Address, Top, Impact, Finish } = phases;
+  return Object.fromEntries(
+    Object.entries({ Address, Top, Impact, Finish }).filter(([, time]) => time !== undefined),
+  ) as DetectedPositions;
+}
+
+/** {@link detectSwingPositions} plus `motionStart`, for tempo. */
+export function detectSwingPhases(track: PoseTrack, aspect = 1): SwingPhases | null {
   const series = handSeries(track, aspect);
 
   if (!series) {
@@ -162,7 +182,7 @@ export function detectSwingPositions(track: PoseTrack, aspect = 1): DetectedPosi
     return null;
   }
 
-  const result: DetectedPositions = { Top: times[top] };
+  const result: SwingPhases = { Top: times[top] };
 
   // Impact: first low point after the top that's back near address height.
   const lowEnough = addressY - travel * 0.25;
@@ -191,6 +211,7 @@ export function detectSwingPositions(track: PoseTrack, aspect = 1): DetectedPosi
 
   if (speed[address] <= addressStill) {
     const takeaway = times[address];
+    result.motionStart = takeaway;
 
     while (
       address > 0 &&

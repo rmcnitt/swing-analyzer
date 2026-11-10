@@ -15,6 +15,8 @@ export const POSE_TRACK_VERSION = 1;
 /** BlazePose landmark indices used by the app. Left/right are the golfer's own sides. */
 export const LM = {
   nose: 0,
+  leftEar: 7,
+  rightEar: 8,
   leftShoulder: 11,
   rightShoulder: 12,
   leftElbow: 13,
