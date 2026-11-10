@@ -16,6 +16,7 @@ import {
   headMovement,
   headSource,
   swingTempo,
+  buildSwingTraces,
 } from "@/lib/pose/swing-check";
 import { detectSwingPhases } from "@/lib/pose/swing-positions";
 import { loadPoseFixture } from "@/tests/helpers/pose-fixtures";
@@ -156,5 +157,29 @@ describe("describeHeadShift", () => {
 
   it("calls tiny movement steady", () => {
     expect(describeHeadShift({ forward: 0.1, down: -0.2 }, "face-on")).toBe("steady");
+  });
+});
+
+describe("buildSwingTraces", () => {
+  it("builds hand and head traces from the positions", () => {
+    const { track, phases } = sample("sample-video-face-on");
+    const traces = buildSwingTraces(
+      track,
+      { address: phases.Address, top: phases.Top, impact: phases.Impact, finish: phases.Finish },
+      PORTRAIT,
+    );
+
+    expect(traces.hands!.points.length).toBeGreaterThan(50);
+    expect(traces.hands!.top).toBe(phases.Top);
+    expect(traces.head!.points[0].t).toBeGreaterThanOrEqual(phases.Address! - 1e-6);
+    expect(traces.head!.points.at(-1)!.t).toBeLessThanOrEqual(phases.Impact! + 1e-6);
+    // Roughly a head: 1–5% of the frame height in these portrait clips.
+    expect(traces.head!.radius).toBeGreaterThan(0.01);
+    expect(traces.head!.radius).toBeLessThan(0.05);
+  });
+
+  it("draws nothing without an address", () => {
+    const { track, phases } = sample("sample-video-face-on");
+    expect(buildSwingTraces(track, { top: phases.Top, impact: phases.Impact })).toEqual({ hands: null, head: null });
   });
 });

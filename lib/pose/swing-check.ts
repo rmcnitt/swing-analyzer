@@ -234,3 +234,43 @@ export function describeHeadShift(shift: HeadShift, view: CameraView) {
 
   return parts.length > 0 ? `≈${parts.join(" · ")}` : "steady";
 }
+
+export interface SwingTraces {
+  /** Hands from Address to Finish (or as far as positions allow), split at Top and Impact. */
+  hands: { points: PathPoint[]; top?: number; impact?: number } | null;
+  /** Head path from Address to Impact; `radius` (frame-height units) sizes the address ring. */
+  head: { points: PathPoint[]; radius: number } | null;
+}
+
+/** What to draw for a clip, given its swing positions (seconds; marked or detected). */
+export function buildSwingTraces(
+  track: PoseTrack,
+  { address, top, impact, finish }: { address?: number; top?: number; impact?: number; finish?: number },
+  aspect = 1,
+): SwingTraces {
+  if (address === undefined) {
+    return { hands: null, head: null };
+  }
+
+  const handsEnd = finish ?? impact ?? top;
+  const hands =
+    handsEnd !== undefined && handsEnd > address
+      ? { points: handPath(track, address, handsEnd), top, impact }
+      : null;
+
+  const headEnd = impact ?? top;
+  const start = frameIndexNear(track, address);
+  let head: SwingTraces["head"] = null;
+
+  if (headEnd !== undefined && headEnd > address && start >= 0 && hasPose(track, start)) {
+    // About the head's half-height (~4.5 in against ~33 in of leg). Leg length is a steadier
+    // ruler than the face, which tilts down at address.
+    const radius = Math.max(0.01, legLength(track, start, aspect) * 0.13);
+    head = { points: headPath(track, address, headEnd), radius };
+  }
+
+  return {
+    hands: hands && hands.points.length > 1 ? hands : null,
+    head: head && head.points.length > 0 ? head : null,
+  };
+}
