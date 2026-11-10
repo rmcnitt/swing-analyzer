@@ -26,7 +26,10 @@ Next.js 16 App Router, React 19, TypeScript, Tailwind v4, react-konva (drawing),
   `sync.ts` (checkpoint time mapping) + `sync-group.ts` (pane playback/looping), `positions.ts`, `shape-edit.ts`,
   `framing.ts`, `loop.ts`, `shortcuts.ts` (key map), `annotations.ts` (normalized geometry), `frames.ts` (fps/stepping).
 - `lib/pose/` pose estimation: `pose-engine.ts` (MediaPipe, lazy), `pose-cache.ts` (own IndexedDB db),
-  `pose-store.ts` (per-clip status/tracks), `landmarks.ts` (packed track format); overlay in `pose-overlay.tsx`.
+  `pose-store.ts` (per-clip status/tracks), `landmarks.ts` (packed track format), `clean-track.ts`,
+  `swing-positions.ts` (Address/Top/Impact/Finish from the hand path), `golfer-box.ts`, `auto-positions.ts`,
+  `swing-check.ts` + `draw-traces.ts` (tempo, head movement, traces); UI in `pose-overlay.tsx`, `swing-check.tsx`.
+  Detection is tested on recorded sample tracks in `tests/fixtures/pose/`.
 - Annotation geometry is stored **normalized 0–1** relative to the video frame; convert with `lib/analysis/annotations.ts`.
 
 ## Conventions

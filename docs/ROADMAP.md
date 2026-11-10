@@ -74,10 +74,19 @@ session fields are optional, so main keeps reading the same browser data either 
    re-detects. Sync turns on when both swings share ≥2 positions. Tracks are cleaned first (side-swap fix +
    smoothing, `clean-track.ts`). Tested on recorded sample tracks (`tests/fixtures/pose/`) vs hand-labelled
    frames. ← **checkpoint: review on real clips.**
-5. [ ] **Joint angles** (spine tilt, lead arm, knee flex) from world landmarks, labelled approximate.
-6. [ ] _(optional)_ Angle-over-time chart.
+5. [x] **Swing check** (replaces joint angles, 2026-11-10): the skeleton alone gave golfers nothing to act on, and
+   shoulder/hip angles aren't reliable. A per-pane strip (Gauge button) built on what pose tracks well:
+   - **Tempo** backswing : downswing (takeaway start → Top → Impact; tour ≈ 3:1).
+   - **Head movement** at Top and Impact vs Address, in approximate inches (scaled by leg length), with golf
+     directions from the pose (camera view from shoulder width; target/ball side from the hands).
+   - **Traces**: hand path (backswing orange, downswing blue) and head path with an address ring; in PNG export.
+   Logic in `lib/pose/swing-check.ts` + `draw-traces.ts`, tested on the sample tracks (face-on tempo 3.0:1; its
+   4.6 in head dip matches the frames). ← **checkpoint: user review.**
+6. [ ] _(optional, later)_ Joint angles / angle-over-time chart, only for angles that prove reliable.
 
 Notes: analysis takes ~10–17 s per 5 s clip on the user's machine. Takeaway and Transition aren't detected.
+On the user's driver clip (hoodie), Address/Finish were a few frames off and Impact one frame early; accepted
+as good enough (2026-11-10). More varied test clips would be the way to improve detection.
 
 ## Phase 4 — Ship it
 - Landing/first-run: hub explains in one line, "Try the sample swing" + "Upload your swing" CTAs; privacy note ("videos never leave your browser").
