@@ -1,8 +1,8 @@
 import { frameIndexNear, hasPose, landmarkAt, LM, type PoseTrack } from "@/lib/pose/landmarks";
 
 /**
- * "Swing check": tempo, hand path and head movement, built only on what pose estimation tracks
- * reliably (hands, head, legs) and on the swing positions.
+ * "Swing check": tempo and head movement, built only on what pose estimation tracks reliably
+ * (hands, head, legs) and on the swing positions.
  */
 
 export interface Tempo {
@@ -52,14 +52,6 @@ function midpoint(track: PoseTrack, index: number, a: number, b: number) {
   const p = landmarkAt(track, index, a);
   const q = landmarkAt(track, index, b);
   return { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
-}
-
-/** The hands (midpoint of the wrists) from `from` to `to` seconds. */
-export function handPath(track: PoseTrack, from: number, to: number): PathPoint[] {
-  return framesBetween(track, from, to).map((index) => ({
-    ...midpoint(track, index, LM.leftWrist, LM.rightWrist),
-    t: track.times[index],
-  }));
 }
 
 export type HeadSource = "ears" | "nose";
@@ -236,8 +228,6 @@ export function describeHeadShift(shift: HeadShift, view: CameraView) {
 }
 
 export interface SwingTraces {
-  /** Hands from Address to Finish (or as far as positions allow), split at Top and Impact. */
-  hands: { points: PathPoint[]; top?: number; impact?: number } | null;
   /** Head path from Address to Impact; `radius` (frame-height units) sizes the address ring. */
   head: { points: PathPoint[]; radius: number } | null;
 }
@@ -245,18 +235,12 @@ export interface SwingTraces {
 /** What to draw for a clip, given its swing positions (seconds; marked or detected). */
 export function buildSwingTraces(
   track: PoseTrack,
-  { address, top, impact, finish }: { address?: number; top?: number; impact?: number; finish?: number },
+  { address, top, impact }: { address?: number; top?: number; impact?: number },
   aspect = 1,
 ): SwingTraces {
   if (address === undefined) {
-    return { hands: null, head: null };
+    return { head: null };
   }
-
-  const handsEnd = finish ?? impact ?? top;
-  const hands =
-    handsEnd !== undefined && handsEnd > address
-      ? { points: handPath(track, address, handsEnd), top, impact }
-      : null;
 
   const headEnd = impact ?? top;
   const start = frameIndexNear(track, address);
@@ -269,8 +253,5 @@ export function buildSwingTraces(
     head = { points: headPath(track, address, headEnd), radius };
   }
 
-  return {
-    hands: hands && hands.points.length > 1 ? hands : null,
-    head: head && head.points.length > 0 ? head : null,
-  };
+  return { head: head && head.points.length > 0 ? head : null };
 }

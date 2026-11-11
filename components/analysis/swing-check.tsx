@@ -26,7 +26,7 @@ export function SwingTraceOverlay({
   height: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const { hands, head } = visible;
+  const { head } = visible;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -41,8 +41,8 @@ export function SwingTraceOverlay({
     canvas.height = Math.round(height * ratio);
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     context.clearRect(0, 0, width, height);
-    drawSwingTraces(context, traces, { hands, head }, width, height);
-  }, [traces, hands, head, width, height]);
+    drawSwingTraces(context, traces, { head }, width, height);
+  }, [traces, head, width, height]);
 
   return (
     <canvas
@@ -156,10 +156,6 @@ export function SwingCheckCard({ pose, data, visible, onToggle, onAnalyze, onClo
         </div>
 
         <div className="ml-auto flex items-center gap-1">
-          <TraceToggle active={visible.hands} onClick={() => onToggle("hands")} label="Hand path">
-            <span className="h-0.5 w-2" style={{ background: TRACE_COLORS.backswing }} />
-            <span className="h-0.5 w-2" style={{ background: TRACE_COLORS.downswing }} />
-          </TraceToggle>
           <TraceToggle active={visible.head} onClick={() => onToggle("head")} label="Head">
             <span className="size-2 rounded-full border-2" style={{ borderColor: TRACE_COLORS.head }} />
           </TraceToggle>

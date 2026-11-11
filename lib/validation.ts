@@ -129,7 +129,6 @@ export const sessionSchema = z.object({
       poseVisible: z.boolean().optional(),
       autoPositionsFor: z.string().optional(),
       swingCheck: z.boolean().optional(),
-      hideHandPath: z.boolean().optional(),
       hideHeadTrace: z.boolean().optional(),
     }),
   ),

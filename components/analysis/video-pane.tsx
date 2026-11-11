@@ -237,11 +237,10 @@ export function VideoPane({
   }, [poseStore, video?.id, playbackProblem]);
 
   const swingCheckOn = Boolean(pane.swingCheck && video && !playbackProblem);
-  const traceVisibility = { hands: !pane.hideHandPath, head: !pane.hideHeadTrace };
+  const traceVisibility = { head: !pane.hideHeadTrace };
   const addressTime = positions.get("address");
   const topTime = positions.get("top");
   const impactTime = positions.get("impact");
-  const finishTime = positions.get("finish");
   const frameWidth = video?.width;
   const frameHeight = video?.height;
 
@@ -254,7 +253,7 @@ export function VideoPane({
 
     const frame = { width: frameWidth, height: frameHeight };
     const phases = autoSwingPhases(poseTrack, frame);
-    const times = { address: addressTime, top: topTime, impact: impactTime, finish: finishTime };
+    const times = { address: addressTime, top: topTime, impact: impactTime };
     const data: SwingCheckData = {
       tempo: swingTempo({ start: phases?.motionStart, top: topTime, impact: impactTime }),
       head: headMovement(poseTrack, times, aspectOf(frame)),
@@ -262,7 +261,7 @@ export function VideoPane({
     };
 
     return { data, traces: buildSwingTraces(poseTrack, times, aspectOf(frame)) };
-  }, [swingCheckOn, poseTrack, frameWidth, frameHeight, addressTime, topTime, impactTime, finishTime]);
+  }, [swingCheckOn, poseTrack, frameWidth, frameHeight, addressTime, topTime, impactTime]);
 
   const analyzePose = () => {
     if (video) {
@@ -954,14 +953,7 @@ export function VideoPane({
                   pose={poseState}
                   data={swingCheck?.data ?? null}
                   visible={traceVisibility}
-                  onToggle={(trace) =>
-                    onUpdatePane(
-                      pane.id,
-                      trace === "hands"
-                        ? { hideHandPath: !pane.hideHandPath }
-                        : { hideHeadTrace: !pane.hideHeadTrace },
-                    )
-                  }
+                  onToggle={() => onUpdatePane(pane.id, { hideHeadTrace: !pane.hideHeadTrace })}
                   onAnalyze={analyzePose}
                   onClose={() => onUpdatePane(pane.id, { swingCheck: false })}
                 />

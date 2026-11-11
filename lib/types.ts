@@ -87,7 +87,6 @@ export interface AnalysisPane {
   autoPositionsFor?: string;
   /** Show the Swing check box (tempo, head movement) and its traces. */
   swingCheck?: boolean;
-  hideHandPath?: boolean;
   hideHeadTrace?: boolean;
 }
 

@@ -12,7 +12,6 @@ import {
 import {
   describeHeadShift,
   detectCameraView,
-  handPath,
   headMovement,
   headSource,
   swingTempo,
@@ -101,18 +100,6 @@ describe("camera view and head movement on the samples", () => {
   });
 });
 
-describe("handPath", () => {
-  it("covers the requested range in time order", () => {
-    const { track, phases } = sample("sample-video-face-on");
-    const path = handPath(track, phases.Address!, phases.Finish!);
-
-    expect(path.length).toBeGreaterThan(50);
-    expect(path[0].t).toBeGreaterThanOrEqual(phases.Address! - 1e-6);
-    expect(path.at(-1)!.t).toBeLessThanOrEqual(phases.Finish! + 1e-6);
-    expect(path.every((point, i) => i === 0 || point.t > path[i - 1].t)).toBe(true);
-  });
-});
-
 function trackWithEars(earVisibility: number): PoseTrack {
   const times = [0.1, 0.2, 0.3];
   const data = new Float32Array(times.length * FRAME_STRIDE);
@@ -161,16 +148,14 @@ describe("describeHeadShift", () => {
 });
 
 describe("buildSwingTraces", () => {
-  it("builds hand and head traces from the positions", () => {
+  it("builds the head trace from the positions", () => {
     const { track, phases } = sample("sample-video-face-on");
     const traces = buildSwingTraces(
       track,
-      { address: phases.Address, top: phases.Top, impact: phases.Impact, finish: phases.Finish },
+      { address: phases.Address, top: phases.Top, impact: phases.Impact },
       PORTRAIT,
     );
 
-    expect(traces.hands!.points.length).toBeGreaterThan(50);
-    expect(traces.hands!.top).toBe(phases.Top);
     expect(traces.head!.points[0].t).toBeGreaterThanOrEqual(phases.Address! - 1e-6);
     expect(traces.head!.points.at(-1)!.t).toBeLessThanOrEqual(phases.Impact! + 1e-6);
     // Roughly a head: 1–5% of the frame height in these portrait clips.
@@ -180,6 +165,6 @@ describe("buildSwingTraces", () => {
 
   it("draws nothing without an address", () => {
     const { track, phases } = sample("sample-video-face-on");
-    expect(buildSwingTraces(track, { top: phases.Top, impact: phases.Impact })).toEqual({ hands: null, head: null });
+    expect(buildSwingTraces(track, { top: phases.Top, impact: phases.Impact })).toEqual({ head: null });
   });
 });
