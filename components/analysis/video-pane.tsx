@@ -60,8 +60,10 @@ import { aspectOf, autoSwingPhases } from "@/lib/pose/derived";
 import { drawSwingChecks, type CheckVisibility } from "@/lib/pose/draw-checks";
 import {
   buildCheckGuides,
+  earlyExtension,
   headMovement,
   isCheckOn,
+  leadArmPlane,
   postureCheck,
   SWING_CHECKS,
   swingTempo,
@@ -286,10 +288,12 @@ export function VideoPane({
       tempo: swingTempo({ start: phases?.motionStart, top: topTime, impact: impactTime }),
       head: headMovement(poseTrack, times, aspect, { heightInches }),
       posture: postureCheck(poseTrack, times, aspect),
+      extension: earlyExtension(poseTrack, times, aspect, { heightInches }),
+      leadArm: leadArmPlane(poseTrack, times, aspect),
       noSwing: !phases,
     };
 
-    return { data, guides: buildCheckGuides(poseTrack, times, aspect) };
+    return { data, guides: buildCheckGuides(poseTrack, times, aspect, { heightInches }) };
   }, [swingCheckOn, poseTrack, frameWidth, frameHeight, addressTime, topTime, impactTime, heightInches]);
 
   const analyzePose = () => {
@@ -1042,6 +1046,8 @@ export function VideoPane({
                   timeStore={timeStore}
                   frameTolerance={frameDuration(video.fps) / 2}
                   height={golferHeight}
+                  corner={pane.checksCorner ?? "top-left"}
+                  onMoveCorner={(corner) => onUpdatePane(pane.id, { checksCorner: corner })}
                   onToggleCheck={toggleCheck}
                   onJump={(label) => onJumpToPosition(pane.id, label)}
                   onSetHeight={(inches) => onSetGolferHeight(video.id, inches)}

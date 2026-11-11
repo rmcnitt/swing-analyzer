@@ -18,6 +18,8 @@ export const SWING_CHECKS: readonly SwingCheckInfo[] = [
   { id: "tempo", label: "Tempo", defaultOn: true },
   { id: "head", label: "Head", focus: "Address", defaultOn: true },
   { id: "posture", label: "Posture", focus: "Address", defaultOn: false },
+  { id: "extension", label: "Early ext.", focus: "Address", defaultOn: false },
+  { id: "leadArm", label: "Lead arm", focus: "Top", defaultOn: false },
 ];
 
 export function isCheckOn(checks: Partial<Record<SwingCheckId, boolean>> | undefined, id: SwingCheckId) {
@@ -30,6 +32,10 @@ export const CHECK_TOLERANCES = {
   headInches: 2,
   /** Spine angle change from Address, degrees. */
   postureDegrees: 5,
+  /** Hips moving toward the ball from Address (early extension), inches. Behind is fine. */
+  extensionInches: 1.5,
+  /** Lead arm vs shoulder plane at the top, degrees either way. */
+  leadArmDegrees: 10,
 } as const;
 
 /** Swing position times (seconds), marked or detected. */
@@ -162,6 +168,8 @@ export interface HeadShift {
 export interface HeadMovement {
   view: CameraView;
   source: HeadSource;
+  /** Which way `forward` points on screen (+1 right, -1 left). */
+  screenSign: 1 | -1;
   atTop?: HeadShift;
   atImpact?: HeadShift;
 }
@@ -223,7 +231,7 @@ export function headMovement(
 
   const handsAtAddress = midpoint(track, start, LM.leftWrist, LM.rightWrist);
   const topIndex = top === undefined ? -1 : frameIndexNear(track, top);
-  let forwardSign = 1;
+  let forwardSign: 1 | -1 = 1;
 
   if (view === "face-on" && topIndex >= 0 && hasPose(track, topIndex)) {
     // At the top the hands are on the trail side; the target is the other way.
@@ -248,7 +256,7 @@ export function headMovement(
     };
   };
 
-  return { view, source, atTop: shiftAt(top), atImpact: shiftAt(impact) };
+  return { view, source, screenSign: forwardSign, atTop: shiftAt(top), atImpact: shiftAt(impact) };
 }
 
 /** Below this the head counts as not having moved that way. */
@@ -289,6 +297,27 @@ export function describeHeadShift(shift: HeadShift, view: CameraView, { short = 
   }
 
   return short ? parts.join(" · ") : `≈${parts.join(" · ")}`;
+}
+
+const ARROWS = { down: "↓", up: "↑", right: "→", left: "←" } as const;
+
+/**
+ * Compact on-screen form for a table cell, e.g. "↓1.8 ←0.8": inches, with arrows as the movement
+ * looks on the video (`screenSign` from HeadMovement).
+ */
+export function headShiftArrows(shift: HeadShift, screenSign: 1 | -1) {
+  const parts: string[] = [];
+  const right = shift.forward * screenSign;
+
+  if (Math.abs(shift.down) >= STEADY_INCHES) {
+    parts.push(`${shift.down > 0 ? ARROWS.down : ARROWS.up}${Math.abs(shift.down).toFixed(1)}`);
+  }
+
+  if (Math.abs(right) >= STEADY_INCHES) {
+    parts.push(`${right > 0 ? ARROWS.right : ARROWS.left}${Math.abs(right).toFixed(1)}`);
+  }
+
+  return parts.length > 0 ? parts.join(" ") : "steady";
 }
 
 /** Straight-line distance of a head shift, in inches. */
@@ -388,6 +417,127 @@ export function postureWithinTolerance(posture: Posture) {
   return change === undefined || Math.abs(change) <= CHECK_TOLERANCES.postureDegrees;
 }
 
+/**
+ * Early extension: how far the hips (and so the butt) moved toward the ball from Address, at Top
+ * and Impact, in inches. Positive = toward the ball (off "the wall"); negative = behind it.
+ */
+export interface Extension {
+  atTop?: number;
+  atImpact?: number;
+  /** Which way the ball is on screen (+1 right, -1 left). */
+  ballSide: 1 | -1;
+}
+
+const HIPS = [LM.leftHip, LM.rightHip] as const;
+
+export function earlyExtension(
+  track: PoseTrack,
+  { address, top, impact }: SwingTimes,
+  aspect = 1,
+  { heightInches = AVERAGE_HEIGHT_INCHES }: CheckOptions = {},
+) {
+  const start = address === undefined ? -1 : frameIndexNear(track, address);
+
+  if (!allVisible(track, start, HIPS)) {
+    return null;
+  }
+
+  return gate(track, start, aspect, (): Extension => {
+    const side = ballSide(track, start);
+    const scale = inchesPerUnit(track, start, aspect, heightInches);
+    const origin = midpoint(track, start, LM.leftHip, LM.rightHip).x;
+    const shiftAt = (time?: number) => {
+      const index = time === undefined ? -1 : frameIndexNear(track, time);
+      return allVisible(track, index, HIPS) && scale > 0
+        ? (midpoint(track, index, LM.leftHip, LM.rightHip).x - origin) * aspect * scale * side
+        : undefined;
+    };
+
+    return { atTop: shiftAt(top), atImpact: shiftAt(impact), ballSide: side };
+  });
+}
+
+export function extensionWithinTolerance(extension: Pick<Extension, "atTop" | "atImpact">) {
+  return [extension.atTop, extension.atImpact].every(
+    (shift) => shift === undefined || shift <= CHECK_TOLERANCES.extensionInches,
+  );
+}
+
+/** Table-cell form of an extension shift: "on line", or e.g. "→0.4" (arrow as seen on screen). */
+export function extensionArrow(inches: number, ballSide: 1 | -1) {
+  if (Math.abs(inches) < STEADY_INCHES) {
+    return "on line";
+  }
+
+  return `${inches * ballSide > 0 ? ARROWS.right : ARROWS.left}${Math.abs(inches).toFixed(1)}`;
+}
+
+export type BodySide = "left" | "right";
+
+/**
+ * Down-the-line, a right-hander faces right (ball to the right of the hips) and a left-hander
+ * faces left; the lead arm is the one on the target side (left for a right-hander).
+ */
+function leadSide(track: PoseTrack, start: number): BodySide {
+  return ballSide(track, start) > 0 ? "left" : "right";
+}
+
+const SIDE_LANDMARKS = {
+  left: { shoulder: LM.leftShoulder, wrist: LM.leftWrist },
+  right: { shoulder: LM.rightShoulder, wrist: LM.rightWrist },
+} as const;
+
+/** Lead shoulder, trail shoulder and lead wrist for a golfer whose lead arm is `lead`. */
+export function leadArmLandmarks(lead: BodySide) {
+  const trail = lead === "left" ? "right" : "left";
+  return { shoulder: SIDE_LANDMARKS[lead].shoulder, trailShoulder: SIDE_LANDMARKS[trail].shoulder, wrist: SIDE_LANDMARKS[lead].wrist };
+}
+
+/**
+ * Lead arm against the shoulder plane at frame `index` (down-the-line): both measured from the
+ * lead shoulder as an angle above horizontal, pointing back (away from the ball). Positive = the
+ * arm is steeper (above the shoulder plane), negative = flatter (below). Undefined if unclear.
+ */
+export function leadArmAngle(track: PoseTrack, index: number, lead: BodySide, ballSign: 1 | -1, aspect = 1) {
+  const { shoulder, trailShoulder, wrist } = leadArmLandmarks(lead);
+
+  if (!allVisible(track, index, [shoulder, trailShoulder, wrist])) {
+    return undefined;
+  }
+
+  const origin = landmarkAt(track, index, shoulder);
+  const elevation = (landmark: number) => {
+    const point = landmarkAt(track, index, landmark);
+    return (Math.atan2(origin.y - point.y, (point.x - origin.x) * aspect * -ballSign) * 180) / Math.PI;
+  };
+
+  return elevation(wrist) - elevation(trailShoulder);
+}
+
+export interface LeadArm {
+  /** Degrees above (+) or below (−) the shoulder plane at Top. */
+  atTop?: number;
+  lead: BodySide;
+}
+
+/** Lead arm vs shoulder plane at the top (down-the-line only). */
+export function leadArmPlane(track: PoseTrack, { address, top }: SwingTimes, aspect = 1) {
+  const start = address === undefined ? -1 : frameIndexNear(track, address);
+
+  if (start < 0 || !hasPose(track, start)) {
+    return null;
+  }
+
+  return gate(track, start, aspect, (): LeadArm => {
+    const lead = leadSide(track, start);
+    const index = top === undefined ? -1 : frameIndexNear(track, top);
+    return { lead, atTop: index < 0 ? undefined : leadArmAngle(track, index, lead, ballSide(track, start), aspect) };
+  });
+}
+
+/** How far the butt sits behind the hip joints, as a share of leg length (~6 in on 33 in). */
+const BUTT_DEPTH_SHARE = 0.18;
+
 export interface Point2 {
   x: number;
   y: number;
@@ -401,6 +551,14 @@ export interface CheckGuides {
   head?: { source: HeadSource; origin: Point2; radius: number };
   /** Address spine, hip middle to shoulder middle (normalized); down-the-line only. */
   posture?: { hips: Point2; shoulders: Point2 };
+  /**
+   * The "wall": a vertical line at the butt at Address (normalized x, from `top` to `bottom`).
+   * The live butt is the hip middle pushed `buttOffset` away from the ball (`ballSide`, ±1);
+   * `tolerance` is the extension tolerance in normalized x.
+   */
+  extension?: { wallX: number; top: number; bottom: number; ballSide: 1 | -1; buttOffset: number; tolerance: number };
+  /** Shown around the Top frame (`topIndex`): shoulder plane and lead arm lines. */
+  leadArm?: { topIndex: number; lead: BodySide; ballSide: 1 | -1 };
 }
 
 /** Overlay guides for a clip, given its swing positions (seconds; marked or detected). */
@@ -408,6 +566,7 @@ export function buildCheckGuides(
   track: PoseTrack,
   { address, top, impact }: SwingTimes,
   aspect = 1,
+  { heightInches = AVERAGE_HEIGHT_INCHES }: CheckOptions = {},
 ): CheckGuides {
   const start = address === undefined ? -1 : frameIndexNear(track, address);
 
@@ -423,10 +582,36 @@ export function buildCheckGuides(
   const radius = Math.max(0.01, legLength(track, start, aspect) * 0.13);
   guides.head = { source, origin: headAt(track, start, source), radius };
 
-  if (detectCameraView(track, start, aspect) === "down-the-line" && spineAngle(track, start, aspect) !== undefined) {
-    guides.posture = {
-      hips: midpoint(track, start, LM.leftHip, LM.rightHip),
-      shoulders: midpoint(track, start, LM.leftShoulder, LM.rightShoulder),
+  if (detectCameraView(track, start, aspect) !== "down-the-line") {
+    return guides;
+  }
+
+  const hips = midpoint(track, start, LM.leftHip, LM.rightHip);
+
+  if (spineAngle(track, start, aspect) !== undefined) {
+    guides.posture = { hips, shoulders: midpoint(track, start, LM.leftShoulder, LM.rightShoulder) };
+  }
+
+  const topIndex = top === undefined ? -1 : frameIndexNear(track, top);
+
+  if (topIndex >= 0) {
+    guides.leadArm = { topIndex, lead: leadSide(track, start), ballSide: ballSide(track, start) };
+  }
+
+  const legs = legLength(track, start, aspect);
+  const scale = inchesPerUnit(track, start, aspect, heightInches);
+
+  if (allVisible(track, start, HIPS) && legs > 0 && scale > 0) {
+    const side = ballSide(track, start);
+    const buttOffset = (legs * BUTT_DEPTH_SHARE) / aspect;
+    const ankles = midpoint(track, start, LM.leftAnkle, LM.rightAnkle);
+    guides.extension = {
+      wallX: hips.x - side * buttOffset,
+      top: hips.y - legs * 0.4,
+      bottom: Math.max(hips.y + legs * 0.3, ankles.y),
+      ballSide: side,
+      buttOffset,
+      tolerance: CHECK_TOLERANCES.extensionInches / scale / aspect,
     };
   }
 

@@ -15,12 +15,17 @@ import {
   clampHeight,
   describeHeadShift,
   detectCameraView,
+  earlyExtension,
+  extensionArrow,
+  headShiftArrows,
+  extensionWithinTolerance,
   formatHeight,
   headMovement,
   headSource,
   headWithinTolerance,
   inchesPerUnit,
   isCheckOn,
+  leadArmPlane,
   postureChange,
   postureCheck,
   postureWithinTolerance,
@@ -202,7 +207,7 @@ describe("check switches", () => {
 
 describe("head tolerance", () => {
   it("flags a head that moved more than two inches", () => {
-    const base = { view: "face-on" as const, source: "ears" as const };
+    const base = { view: "face-on" as const, source: "ears" as const, screenSign: 1 as const };
     expect(headWithinTolerance({ ...base, atTop: { forward: 1, down: 1 } })).toBe(true);
     expect(headWithinTolerance({ ...base, atTop: { forward: 0.5, down: 0 }, atImpact: { forward: 0, down: 2.5 } })).toBe(
       false,
@@ -319,5 +324,134 @@ describe("postureCheck", () => {
     expect(postureChange({ address: 55 })).toBeUndefined();
     expect(postureWithinTolerance({ address: 55, top: 58, impact: 51 })).toBe(true);
     expect(postureWithinTolerance({ address: 55, impact: 62 })).toBe(false);
+  });
+});
+
+/** A down-the-line golfer facing right: shoulders stacked, 0.3 of leg, hands out toward the ball. */
+function dtlFrame(hipX: number): Points {
+  return {
+    ...torso(hipX, 0.1),
+    [LM.leftKnee]: { x: 0.4, y: 0.75 },
+    [LM.rightKnee]: { x: 0.4, y: 0.75 },
+    [LM.leftAnkle]: { x: 0.4, y: 0.9 },
+    [LM.rightAnkle]: { x: 0.4, y: 0.9 },
+    [LM.leftWrist]: { x: 0.6, y: 0.65 },
+    [LM.rightWrist]: { x: 0.6, y: 0.65 },
+  };
+}
+
+describe("earlyExtension", () => {
+  it("measures the hips moving toward the ball in inches", () => {
+    // Address hips at 0.4; Top 0.39 (back), Impact 0.42 (toward the ball, which is to the right).
+    const track = syntheticTrack([dtlFrame(0.4), dtlFrame(0.39), dtlFrame(0.42)]);
+    const result = earlyExtension(track, { address: 0.05, top: 0.15, impact: 0.25 })!;
+
+    expect(result.ok).toBe(true);
+    const extension = result.ok ? result.value : { ballSide: 1 as const };
+    // 0.3 of leg = 33 in, so 0.01 = 1.1 in.
+    expect(extension.atTop).toBeCloseTo(-1.1, 4);
+    expect(extension.atImpact).toBeCloseTo(2.2, 4);
+    expect(extensionWithinTolerance(extension)).toBe(false);
+    expect(extensionWithinTolerance({ atTop: -3, atImpact: 1 })).toBe(true);
+  });
+
+  it("uses the golfer's height", () => {
+    const track = syntheticTrack([dtlFrame(0.4), dtlFrame(0.4), dtlFrame(0.42)]);
+    const result = earlyExtension(track, { address: 0.05, impact: 0.25 }, 1, { heightInches: 35 })!;
+    expect(result.ok && result.value.atImpact).toBeCloseTo(1.1, 4);
+  });
+
+  it("stays on the wall in the down-the-line sample", () => {
+    const { track, phases } = sample("sample-video-down-the-line");
+    const result = earlyExtension(track, { address: phases.Address, top: phases.Top, impact: phases.Impact }, PORTRAIT)!;
+
+    expect(result.ok).toBe(true);
+    // The frames show the hips holding their line through impact.
+    expect(result.ok && Math.abs(result.value.atImpact!)).toBeLessThan(1.5);
+    expect(result.ok && Math.abs(result.value.atTop!)).toBeLessThan(1.5);
+  });
+
+  it("needs a down-the-line clip", () => {
+    const { track, phases } = sample("sample-video-face-on");
+    expect(earlyExtension(track, { address: phases.Address, impact: phases.Impact }, PORTRAIT)).toEqual({
+      view: "face-on",
+      ok: false,
+    });
+  });
+});
+
+describe("extension guide", () => {
+  it("puts the wall behind the hips, away from the ball", () => {
+    const track = syntheticTrack([dtlFrame(0.4), dtlFrame(0.42)]);
+    const { extension } = buildCheckGuides(track, { address: 0.05, impact: 0.15 });
+
+    expect(extension!.ballSide).toBe(1);
+    expect(extension!.wallX).toBeCloseTo(0.4 - 0.3 * 0.18, 5);
+    // 1.5 in at 110 in per unit.
+    expect(extension!.tolerance).toBeCloseTo(1.5 / 110, 5);
+  });
+});
+
+describe("table-cell forms", () => {
+  it("draws head movement as on-screen arrows", () => {
+    // Target to the left on screen (screenSign -1): moving toward it is a left arrow.
+    expect(headShiftArrows({ forward: 0.8, down: 1.8 }, -1)).toBe("↓1.8 ←0.8");
+    expect(headShiftArrows({ forward: 0.8, down: -0.4 }, 1)).toBe("↑0.4 →0.8");
+    expect(headShiftArrows({ forward: 0.1, down: 0.1 }, 1)).toBe("steady");
+  });
+
+  it("draws extension toward the ball's side of the screen", () => {
+    expect(extensionArrow(0.4, 1)).toBe("→0.4");
+    expect(extensionArrow(-0.6, 1)).toBe("←0.6");
+    expect(extensionArrow(0.4, -1)).toBe("←0.4");
+    expect(extensionArrow(0.1, 1)).toBe("on line");
+  });
+});
+
+/** Top of a right-hander's swing down-the-line: lead (left) shoulder in front, trail shoulder up and back. */
+function topFrame(wrist: { x: number; y: number }): Points {
+  return {
+    ...dtlFrame(0.4),
+    [LM.leftShoulder]: { x: 0.5, y: 0.4 },
+    [LM.rightShoulder]: { x: 0.45, y: 0.35 },
+    [LM.leftWrist]: wrist,
+    [LM.rightWrist]: wrist,
+  };
+}
+
+describe("leadArmPlane", () => {
+  const times = { address: 0.05, top: 0.15 };
+
+  it("measures the lead arm against the shoulder plane at the top", () => {
+    // Shoulder plane rises at 45°; an arm rising at atan(0.14 / 0.1) ≈ 54.5° is 9.5° above it.
+    const above = leadArmPlane(syntheticTrack([dtlFrame(0.4), topFrame({ x: 0.4, y: 0.26 })]), times)!;
+    expect(above.ok && above.value.lead).toBe("left");
+    expect(above.ok && above.value.atTop).toBeCloseTo((Math.atan2(0.14, 0.1) * 180) / Math.PI - 45, 4);
+
+    // Flatter than the shoulders: below the plane.
+    const below = leadArmPlane(syntheticTrack([dtlFrame(0.4), topFrame({ x: 0.36, y: 0.32 })]), times)!;
+    expect(below.ok && below.value.atTop).toBeLessThan(-10);
+
+    // Along the shoulder line: on plane.
+    const on = leadArmPlane(syntheticTrack([dtlFrame(0.4), topFrame({ x: 0.4, y: 0.3 })]), times)!;
+    expect(on.ok && on.value.atTop).toBeCloseTo(0, 4);
+  });
+
+  it("reads the down-the-line sample about as the frames show it", () => {
+    const { track, phases } = sample("sample-video-down-the-line");
+    const result = leadArmPlane(track, { address: phases.Address, top: phases.Top }, PORTRAIT)!;
+
+    expect(result.ok && result.value.lead).toBe("left");
+    // Measured on the Top frame: arm ~9° steeper than the shoulder line.
+    expect(result.ok && result.value.atTop).toBeGreaterThan(0);
+    expect(result.ok && result.value.atTop).toBeLessThan(20);
+  });
+
+  it("needs a down-the-line clip", () => {
+    const { track, phases } = sample("sample-video-face-on");
+    expect(leadArmPlane(track, { address: phases.Address, top: phases.Top }, PORTRAIT)).toEqual({
+      view: "face-on",
+      ok: false,
+    });
   });
 });

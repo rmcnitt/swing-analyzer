@@ -1,10 +1,23 @@
-import { hasPose, LM, type PoseTrack } from "@/lib/pose/landmarks";
-import { headAt, midpoint, spineAngle, type CheckGuides, type Point2 } from "@/lib/pose/swing-check";
+import { hasPose, landmarkAt, LM, type PoseTrack } from "@/lib/pose/landmarks";
+import {
+  CHECK_TOLERANCES,
+  headAt,
+  leadArmAngle,
+  leadArmLandmarks,
+  midpoint,
+  spineAngle,
+  type CheckGuides,
+  type Point2,
+} from "@/lib/pose/swing-check";
 import type { SwingCheckId } from "@/lib/types";
 
 export const CHECK_COLORS = {
   head: "#facc15",
   posture: "#34d399",
+  extension: "#f472b6",
+  shoulderPlane: "#38bdf8",
+  leadArm: "#ff8a1f",
+  warn: "#fbbf24",
 } as const;
 
 export type CheckVisibility = Partial<Record<SwingCheckId, boolean>>;
@@ -35,6 +48,14 @@ export function drawSwingChecks(
 
   if (visible.posture && guides.posture) {
     drawPosture(context, track, index, guides.posture, guides.aspect, width, height, scale);
+  }
+
+  if (visible.extension && guides.extension) {
+    drawExtension(context, track, index, guides.extension, width, height, scale);
+  }
+
+  if (visible.leadArm && guides.leadArm) {
+    drawLeadArm(context, track, index, guides.leadArm, guides.aspect, width, height, scale);
   }
 
   context.restore();
@@ -152,5 +173,116 @@ function drawPosture(
     label(context, text, leansRight ? hx - 26 * scale - textWidth : hx + 26 * scale, hy, CHECK_COLORS.posture, scale);
   }
 
+  context.restore();
+}
+
+/**
+ * The wall: a dashed vertical line at the butt at Address, and the butt now (a dot at hip height).
+ * When the butt has come off the wall toward the ball, the gap is drawn, amber past tolerance.
+ */
+function drawExtension(
+  context: CanvasRenderingContext2D,
+  track: PoseTrack,
+  index: number,
+  { wallX, top, bottom, ballSide, buttOffset, tolerance }: NonNullable<CheckGuides["extension"]>,
+  width: number,
+  height: number,
+  scale: number,
+) {
+  context.save();
+  context.strokeStyle = CHECK_COLORS.extension;
+  context.lineWidth = 2 * scale;
+  context.setLineDash([7 * scale, 5 * scale]);
+  context.beginPath();
+  context.moveTo(wallX * width, top * height);
+  context.lineTo(wallX * width, bottom * height);
+  context.stroke();
+  context.setLineDash([]);
+
+  const hipsVisible =
+    hasPose(track, index) &&
+    [LM.leftHip, LM.rightHip].every((landmark) => landmarkAt(track, index, landmark).visibility >= 0.5);
+
+  if (hipsVisible) {
+    const hips = midpoint(track, index, LM.leftHip, LM.rightHip);
+    const buttX = hips.x - ballSide * buttOffset;
+    const off = (buttX - wallX) * ballSide;
+    const color = off > tolerance ? CHECK_COLORS.warn : CHECK_COLORS.extension;
+    const y = hips.y * height;
+
+    if (off > 0.002) {
+      context.strokeStyle = color;
+      context.lineWidth = 3 * scale;
+      context.beginPath();
+      context.moveTo(wallX * width, y);
+      context.lineTo(buttX * width, y);
+      context.stroke();
+    }
+
+    context.fillStyle = color;
+    context.strokeStyle = "#0b0c0e";
+    context.lineWidth = 1.5 * scale;
+    context.beginPath();
+    context.arc(buttX * width, y, 5 * scale, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+  }
+
+  context.restore();
+}
+
+/** Frames either side of Top that still show the lead arm lines. */
+const LEAD_ARM_WINDOW = 2;
+
+/**
+ * Around the top: the shoulder plane (a line through both shoulders, extended) and the lead arm
+ * (lead shoulder to wrist), with the angle between them.
+ */
+function drawLeadArm(
+  context: CanvasRenderingContext2D,
+  track: PoseTrack,
+  index: number,
+  { topIndex, lead, ballSide }: NonNullable<CheckGuides["leadArm"]>,
+  aspect: number,
+  width: number,
+  height: number,
+  scale: number,
+) {
+  if (Math.abs(index - topIndex) > LEAD_ARM_WINDOW) {
+    return;
+  }
+
+  const angle = leadArmAngle(track, index, lead, ballSide, aspect);
+
+  if (angle === undefined) {
+    return;
+  }
+
+  const { shoulder, trailShoulder, wrist } = leadArmLandmarks(lead);
+  const s = landmarkAt(track, index, shoulder);
+  const t = landmarkAt(track, index, trailShoulder);
+  const w = landmarkAt(track, index, wrist);
+
+  context.save();
+  // Shoulder plane: from below the lead shoulder, through the trail shoulder and well beyond.
+  context.strokeStyle = CHECK_COLORS.shoulderPlane;
+  context.lineWidth = 2 * scale;
+  context.setLineDash([7 * scale, 5 * scale]);
+  context.beginPath();
+  context.moveTo(...along(s, t, -0.8, width, height));
+  context.lineTo(...along(s, t, 4, width, height));
+  context.stroke();
+  context.setLineDash([]);
+
+  context.strokeStyle = CHECK_COLORS.leadArm;
+  context.lineWidth = 3 * scale;
+  context.beginPath();
+  context.moveTo(...along(s, w, 0, width, height));
+  context.lineTo(...along(s, w, 1.25, width, height));
+  context.stroke();
+
+  const tone = Math.abs(angle) <= CHECK_TOLERANCES.leadArmDegrees ? CHECK_COLORS.leadArm : CHECK_COLORS.warn;
+  const [lx, ly] = along(s, w, 1.3, width, height);
+  label(context, `${Math.abs(Math.round(angle))}° ${angle >= 0 ? "above" : "below"}`, lx + 6 * scale, ly, tone, scale);
   context.restore();
 }

@@ -91,7 +91,11 @@ export interface AnalysisPane {
   swingCheck?: boolean;
   /** Which swing checks are switched on (unset ones use their default). */
   checks?: Partial<Record<SwingCheckId, boolean>>;
+  /** Corner of the video the Swing checks panel sits in (default top-left). */
+  checksCorner?: PanelCorner;
 }
+
+export type PanelCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
 export type SwingCheckId = "tempo" | "head" | "posture" | "extension" | "leadArm";
 

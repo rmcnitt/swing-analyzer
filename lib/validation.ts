@@ -140,6 +140,7 @@ export const sessionSchema = z.object({
         })
         .partial()
         .optional(),
+      checksCorner: z.enum(["top-left", "top-right", "bottom-left", "bottom-right"]).optional(),
     }),
   ),
   annotations: z.object({

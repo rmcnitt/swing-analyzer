@@ -1,27 +1,32 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Check, ChevronDown, ChevronUp, Gauge, Pencil, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Gauge, GripHorizontal, Pencil, X } from "lucide-react";
 import { drawSwingChecks, type CheckVisibility } from "@/lib/pose/draw-checks";
 import { frameIndexNear, type PoseTrack } from "@/lib/pose/landmarks";
 import type { PoseState } from "@/lib/pose/pose-store";
 import {
   clampHeight,
   describeHeadShift,
+  CHECK_TOLERANCES,
+  extensionArrow,
   formatHeight,
-  headWithinTolerance,
+  headShiftArrows,
   isCheckOn,
-  postureWithinTolerance,
+  shiftDistance,
+  STEADY_INCHES,
   SWING_CHECKS,
   TOUR_TEMPO,
-  CHECK_TOLERANCES,
   type CheckGuides,
+  type Extension,
   type HeadMovement,
+  type LeadArm,
   type Posture,
   type Tempo,
   type ViewGated,
 } from "@/lib/pose/swing-check";
-import type { SwingCheckId } from "@/lib/types";
+import { CORNER_CLASSES, nearestCorner } from "@/lib/analysis/corner";
+import type { PanelCorner, SwingCheckId } from "@/lib/types";
 import type { TimeStore } from "@/lib/video/time-store";
 import { cn } from "@/lib/utils";
 
@@ -86,6 +91,8 @@ export interface SwingCheckData {
   tempo: Tempo | null;
   head: HeadMovement | null;
   posture: ViewGated<Posture> | null;
+  extension: ViewGated<Extension> | null;
+  leadArm: ViewGated<LeadArm> | null;
   /** Pose ran but found no full swing. */
   noSwing: boolean;
 }
@@ -112,6 +119,8 @@ interface SwingChecksPanelProps {
   /** Half a frame, for highlighting the position the playhead is on. */
   frameTolerance: number;
   height: GolferHeight;
+  corner: PanelCorner;
+  onMoveCorner: (corner: PanelCorner) => void;
   onToggleCheck: (id: SwingCheckId) => void;
   onJump: (label: string) => void;
   onSetHeight: (inches: number) => void;
@@ -136,6 +145,8 @@ export function SwingChecksPanel({
   timeStore,
   frameTolerance,
   height,
+  corner,
+  onMoveCorner,
   onToggleCheck,
   onJump,
   onSetHeight,
@@ -143,6 +154,36 @@ export function SwingChecksPanel({
   onClose,
 }: SwingChecksPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  // While dragging by the title bar: pointer start and current offset (px). Dropping snaps the
+  // panel to the nearest corner of the video area.
+  const [drag, setDrag] = useState<{ pointerId: number; startX: number; startY: number; dx: number; dy: number } | null>(
+    null,
+  );
+
+  const endDrag = (event: React.PointerEvent) => {
+    const panel = panelRef.current;
+    const area = panel?.offsetParent;
+
+    if (drag && panel && area && (Math.abs(drag.dx) > 4 || Math.abs(drag.dy) > 4)) {
+      const box = panel.getBoundingClientRect();
+      const bounds = area.getBoundingClientRect();
+      onMoveCorner(
+        nearestCorner(
+          box.left + box.width / 2 - bounds.left,
+          box.top + box.height / 2 - bounds.top,
+          bounds.width,
+          bounds.height,
+        ),
+      );
+    }
+
+    if (drag) {
+      event.currentTarget.releasePointerCapture(drag.pointerId);
+    }
+
+    setDrag(null);
+  };
   const time = useSyncExternalStore(timeStore.subscribe, timeStore.get, () => 0);
   const ready = pose.status === "ready" && data && !data.noSwing;
 
@@ -182,14 +223,24 @@ export function SwingChecksPanel({
     );
   } else {
     const on = (id: SwingCheckId) => isCheckOn(checks, id);
-    const usesInches = on("head");
+    const usesInches = on("head") || (on("extension") && data.extension?.ok);
+    // Switched-on down-the-line checks on another camera angle fold into one note.
+    const rows = SWING_CHECKS.map((check) => {
+      const content = rowContent(check.id, data);
+      return { check, content, folded: on(check.id) && "needsDownTheLine" in content };
+    });
+    const folded = rows.filter((row) => row.folded).map((row) => row.check.label);
+    const current = JUMPS.find(([, key]) => {
+      const at = positions.get(key);
+      return at !== undefined && Math.abs(time - at) <= frameTolerance;
+    })?.[1];
 
     body = (
       <>
-        <div className="flex border-b border-white/10" role="group" aria-label="Jump to position">
+        <div className={cn(GRID, "border-b border-white/10")} role="group" aria-label="Jump to position">
+          <span className={cn("self-center pl-2.5 text-[10px] uppercase tracking-[0.12em]", muted)}>Jump to</span>
           {JUMPS.map(([label, key]) => {
             const at = positions.get(key);
-            const current = at !== undefined && Math.abs(time - at) <= frameTolerance;
 
             return (
               <button
@@ -197,10 +248,10 @@ export function SwingChecksPanel({
                 type="button"
                 disabled={at === undefined}
                 onClick={() => onJump(label)}
-                aria-pressed={current}
+                aria-pressed={current === key}
                 className={cn(
-                  "h-8 flex-1 text-[12px] pointer-coarse:h-9 disabled:opacity-35",
-                  current
+                  "h-8 text-[12px] pointer-coarse:h-9 disabled:opacity-35",
+                  current === key
                     ? "bg-[color:var(--color-accent)] font-medium text-[color:var(--color-ink)]"
                     : "text-white/80 hover:bg-white/[0.08] hover:text-white",
                 )}
@@ -213,18 +264,25 @@ export function SwingChecksPanel({
         </div>
 
         <ul className="divide-y divide-white/[0.06]">
-          {SWING_CHECKS.map((check) => (
-            <CheckRow key={check.id} label={check.label} on={on(check.id)} onToggle={() => onToggleCheck(check.id)}>
-              {check.id === "tempo" ? <TempoValue tempo={data.tempo} /> : null}
-              {check.id === "head" ? <HeadValue head={data.head} /> : null}
-              {check.id === "posture" ? (
-                <DownTheLine result={data.posture} missing="Mark Address">
-                  {(posture) => <PostureValue posture={posture} />}
-                </DownTheLine>
-              ) : null}
-            </CheckRow>
-          ))}
+          {rows
+            .filter(({ folded }) => !folded)
+            .map(({ check, content }) => (
+              <CheckRow
+                key={check.id}
+                label={check.label}
+                on={on(check.id)}
+                onToggle={() => onToggleCheck(check.id)}
+                content={content}
+                current={current}
+              />
+            ))}
         </ul>
+
+        {folded.length > 0 ? (
+          <p className={cn("border-t border-white/10 px-2.5 py-1.5 leading-4", muted)} title={DOWN_THE_LINE_TITLE}>
+            {folded.join(", ")} {folded.length === 1 ? "needs" : "need"} a down-the-line video
+          </p>
+        ) : null}
 
         {usesInches ? <HeightField height={height} onSetHeight={onSetHeight} /> : null}
       </>
@@ -233,15 +291,43 @@ export function SwingChecksPanel({
 
   return (
     <div
-      className="absolute left-2 top-2 z-10 w-[min(16rem,calc(100%-1rem))] border border-white/10 bg-black/75 text-[12px] text-white shadow-lg backdrop-blur-sm"
+      ref={panelRef}
+      className={cn(
+        "absolute z-10 w-[min(17rem,calc(100%-1rem))] border border-white/10 bg-black/75 text-[12px] text-white shadow-lg backdrop-blur-sm",
+        CORNER_CLASSES[corner],
+        drag ? "opacity-90 shadow-2xl" : null,
+      )}
+      style={drag ? { transform: `translate(${drag.dx}px, ${drag.dy}px)` } : undefined}
       // Keep clicks here from panning or drawing on the video underneath.
       onPointerDown={(event) => event.stopPropagation()}
       role="region"
       aria-label="Swing checks"
     >
-      <div className="flex items-center gap-1.5 py-1 pl-2.5 pr-1">
+      <div
+        className={cn(
+          "flex touch-none items-center gap-1.5 py-1 pl-2.5 pr-1",
+          drag ? "cursor-grabbing" : "cursor-grab",
+        )}
+        title="Drag to move the panel to another corner"
+        onPointerDown={(event) => {
+          if ((event.target as HTMLElement).closest("button")) {
+            return;
+          }
+
+          event.currentTarget.setPointerCapture(event.pointerId);
+          setDrag({ pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, dx: 0, dy: 0 });
+        }}
+        onPointerMove={(event) => {
+          if (drag?.pointerId === event.pointerId) {
+            setDrag({ ...drag, dx: event.clientX - drag.startX, dy: event.clientY - drag.startY });
+          }
+        }}
+        onPointerUp={endDrag}
+        onPointerCancel={() => setDrag(null)}
+      >
         <Gauge className="size-3.5 shrink-0 text-[color:var(--color-accent)]" aria-hidden />
-        <span className="text-[11px] font-medium uppercase tracking-[0.14em]">Swing checks</span>
+        <span className="select-none text-[11px] font-medium uppercase tracking-[0.14em]">Swing checks</span>
+        <GripHorizontal className={cn("size-3.5", muted)} aria-hidden />
         <button
           type="button"
           onClick={() => setCollapsed((value) => !value)}
@@ -267,24 +353,45 @@ export function SwingChecksPanel({
   );
 }
 
+/** Label column, then Address / Top / Impact columns (shared by the jump bar and every row). */
+const GRID = "grid grid-cols-[5.4rem_repeat(3,minmax(0,1fr))]";
+
+interface Cell {
+  /** Several parts stack onto separate lines (head: down and sideways). */
+  text: string | string[];
+  tone?: "good" | "warn" | "muted";
+  title?: string;
+}
+
+/** A check's row: one cell per position, or one line across all three. */
+type RowContent =
+  | { cells: [Cell | null, Cell | null, Cell | null] }
+  | { line: React.ReactNode; title?: string }
+  /** A down-the-line check on a clip filmed from another angle. */
+  | { needsDownTheLine: true };
+
+const toneClass = { good, warn, muted } as const;
+
 function CheckRow({
   label,
   on,
   onToggle,
-  children,
+  content,
+  current,
 }: {
   label: string;
   on: boolean;
   onToggle: () => void;
-  children: React.ReactNode;
+  content: RowContent;
+  current?: string;
 }) {
   return (
-    <li className="flex items-start gap-2 px-2.5 py-1.5">
+    <li className={cn(GRID, "min-h-8 items-stretch pointer-coarse:min-h-10")}>
       <button
         type="button"
         onClick={onToggle}
         aria-pressed={on}
-        className="flex w-[4.3rem] shrink-0 items-center gap-1.5 text-left pointer-coarse:min-h-9"
+        className="flex items-center gap-1.5 pl-2.5 text-left"
         title={on ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
       >
         <span
@@ -301,115 +408,191 @@ function CheckRow({
             )}
           />
         </span>
-        <span className={on ? "text-white" : muted}>{label}</span>
+        <span className={cn("whitespace-nowrap", on ? "text-white" : muted)}>{label}</span>
       </button>
-      {on ? <div className="min-w-0 flex-1 leading-[18px]">{children}</div> : null}
+      {!on || "needsDownTheLine" in content ? null : "line" in content ? (
+        <div className="col-span-3 flex items-center px-2 leading-4" title={content.title}>
+          {content.line}
+        </div>
+      ) : (
+        content.cells.map((cell, index) => (
+          <div
+            key={JUMPS[index][1]}
+            className={cn(
+              "flex flex-col items-center justify-center whitespace-nowrap px-0.5 py-1 text-center leading-[15px] tabular-nums",
+              current === JUMPS[index][1] ? "bg-white/[0.06]" : null,
+              cell?.tone ? toneClass[cell.tone] : null,
+            )}
+            title={cell?.title}
+          >
+            {typeof cell?.text === "string"
+              ? cell.text
+              : cell?.text.map((part) => <span key={part}>{part}</span>)}
+          </div>
+        ))
+      )}
     </li>
   );
 }
 
-function TempoValue({ tempo }: { tempo: Tempo | null }) {
-  if (!tempo) {
-    return <span className={muted}>Mark Top and Impact</span>;
-  }
+const DOWN_THE_LINE_TITLE = "Filmed from behind the golfer, looking down the target line.";
+const degrees = (angle?: number) => (angle === undefined ? "—" : `${Math.round(angle)}°`);
 
-  return (
-    <span title={`Backswing ÷ downswing. Tour players average about ${TOUR_TEMPO} : 1.`}>
-      <span className="font-mono text-[13px]">{tempo.ratio.toFixed(1)}:1</span>{" "}
-      <span className={muted}>
-        {tempo.backswing.toFixed(2)} / {tempo.downswing.toFixed(2)}s
-      </span>
-    </span>
-  );
-}
-
-function HeadValue({ head }: { head: HeadMovement | null }) {
-  if (!head || (!head.atTop && !head.atImpact)) {
-    return <span className={muted}>Mark Address and Top or Impact</span>;
-  }
-
-  const rows = [
-    ["Top", head.atTop],
-    ["Impact", head.atImpact],
-  ] as const;
-  const title = [
-    "Head movement from Address, in approximate inches (scaled from the golfer's height).",
-    ...rows.flatMap(([label, shift]) => (shift ? [`${label}: ${describeHeadShift(shift, head.view)}`] : [])),
-  ].join("\n");
-
-  return (
-    <div className={headWithinTolerance(head) ? good : warn} title={title}>
-      {rows.map(([label, shift]) =>
-        shift ? (
-          <div key={label} className="whitespace-nowrap">
-            <span className={cn("inline-block w-11", muted)}>{label}</span>
-            {describeHeadShift(shift, head.view, { short: true })}
-          </div>
-        ) : null,
-      )}
-    </div>
-  );
-}
-
-/** Shows a down-the-line check's value, or why there isn't one. */
-function DownTheLine<T>({
-  result,
-  missing,
-  children,
-}: {
-  result: ViewGated<T> | null;
-  missing: string;
-  children: (value: T) => React.ReactNode;
-}) {
+/** Unwraps a down-the-line check, or says why there's nothing to show. */
+function gated<T>(result: ViewGated<T> | null, missing: string, show: (value: T) => RowContent): RowContent {
   if (!result) {
-    return <span className={muted}>{missing}</span>;
+    return { line: <span className={muted}>{missing}</span> };
   }
 
   if (!result.ok) {
-    return (
-      <span className={muted} title="Filmed from behind the golfer, looking down the target line.">
-        Needs a down-the-line video
-      </span>
-    );
+    return { needsDownTheLine: true };
   }
 
-  return children(result.value);
+  return show(result.value);
 }
 
-const degrees = (angle?: number) => (angle === undefined ? "—" : `${Math.round(angle)}°`);
+function rowContent(id: SwingCheckId, data: SwingCheckData): RowContent {
+  switch (id) {
+    case "tempo":
+      return tempoRow(data.tempo);
+    case "head":
+      return headRow(data.head);
+    case "posture":
+      return gated(data.posture, "Mark Address", postureRow);
+    case "extension":
+      return gated(data.extension, "Mark Address", extensionRow);
+    case "leadArm":
+      return gated(data.leadArm, "Mark Address", leadArmRow);
+    default:
+      return { line: null };
+  }
+}
 
-function PostureValue({ posture }: { posture: Posture }) {
-  if (posture.address === undefined) {
-    return <span className={muted}>Torso not clear at Address</span>;
+function tempoRow(tempo: Tempo | null): RowContent {
+  if (!tempo) {
+    return { line: <span className={muted}>Mark Top and Impact</span> };
   }
 
-  // Report the position where the spine angle changed most.
-  const changes = (
-    [
-      ["Top", posture.top],
-      ["Impact", posture.impact],
-    ] as const
-  ).flatMap(([label, angle]) => (angle === undefined ? [] : [{ label, change: angle - posture.address! }]));
-  const biggest = changes.reduce<(typeof changes)[number] | undefined>(
-    (best, item) => (!best || Math.abs(item.change) > Math.abs(best.change) ? item : best),
-    undefined,
-  );
-  const held = postureWithinTolerance(posture);
+  return {
+    title: `Backswing ÷ downswing (${tempo.backswing.toFixed(2)}s back, ${tempo.downswing.toFixed(2)}s down). Tour players average about ${TOUR_TEMPO} : 1.`,
+    line: (
+      <span>
+        <span className="font-mono text-[13px]">{tempo.ratio.toFixed(1)} : 1</span>{" "}
+        <span className={muted}>
+          {tempo.backswing.toFixed(2)}s / {tempo.downswing.toFixed(2)}s
+        </span>
+      </span>
+    ),
+  };
+}
 
-  return (
-    <div title="Spine angle above the ground (hip middle to shoulder middle) at Address → Top → Impact.">
-      <div className="font-mono text-[12px]">
-        {degrees(posture.address)} → {degrees(posture.top)} → {degrees(posture.impact)}
-      </div>
-      {biggest ? (
-        <div className={held ? good : warn}>
-          {held
-            ? `Held within ${CHECK_TOLERANCES.postureDegrees}°`
-            : `${biggest.change > 0 ? "Stood up" : "Bent over"} ${Math.abs(Math.round(biggest.change))}° by ${biggest.label}`}
-        </div>
-      ) : null}
-    </div>
-  );
+function headRow(head: HeadMovement | null): RowContent {
+  if (!head || (!head.atTop && !head.atImpact)) {
+    return { line: <span className={muted}>Mark Address and Top or Impact</span> };
+  }
+
+  const cell = (label: string, shift: HeadMovement["atTop"]): Cell | null =>
+    shift
+      ? {
+          text: headShiftArrows(shift, head.screenSign).split(" "),
+          tone: shiftDistance(shift) <= CHECK_TOLERANCES.headInches ? "good" : "warn",
+          title: `Head at ${label}: ${describeHeadShift(shift, head.view)} from Address (approximate inches). Within ${CHECK_TOLERANCES.headInches} in is steady.`,
+        }
+      : null;
+
+  return {
+    cells: [
+      { text: "◌", tone: "muted", title: "The dashed circle marks your head at Address." },
+      cell("Top", head.atTop),
+      cell("Impact", head.atImpact),
+    ],
+  };
+}
+
+function postureRow(posture: Posture): RowContent {
+  if (posture.address === undefined) {
+    return { line: <span className={muted}>Torso not clear at Address</span> };
+  }
+
+  const cell = (label: string, angle?: number): Cell | null => {
+    if (angle === undefined) {
+      return { text: "—", tone: "muted", title: `Torso not clear at ${label}` };
+    }
+
+    const change = angle - posture.address!;
+    const held = Math.abs(change) <= CHECK_TOLERANCES.postureDegrees;
+    return {
+      text: degrees(angle),
+      tone: held ? "good" : "warn",
+      title: held
+        ? `Spine angle at ${label}: within ${CHECK_TOLERANCES.postureDegrees}° of Address.`
+        : `Spine angle at ${label}: ${change > 0 ? "stood up" : "bent over"} ${Math.abs(Math.round(change))}° from Address.`,
+    };
+  };
+
+  return {
+    cells: [
+      {
+        text: degrees(posture.address),
+        title: "Spine angle above the ground at Address (hip middle to shoulder middle).",
+      },
+      cell("Top", posture.top),
+      cell("Impact", posture.impact),
+    ],
+  };
+}
+
+function leadArmRow(arm: LeadArm): RowContent {
+  if (arm.atTop === undefined) {
+    return { line: <span className={muted}>Mark Top (arm and shoulders must be clear)</span> };
+  }
+
+  const angle = Math.round(arm.atTop);
+  const onPlane = Math.abs(arm.atTop) <= CHECK_TOLERANCES.leadArmDegrees;
+  return {
+    cells: [
+      null,
+      {
+        text: angle === 0 ? "on plane" : `${Math.abs(angle)}° ${angle > 0 ? "above" : "below"}`,
+        tone: onPlane ? "good" : "warn",
+        title: `At the top, the lead (${arm.lead}) arm is ${
+          angle === 0 ? "on" : `${Math.abs(angle)}° ${angle > 0 ? "above (steeper than)" : "below (flatter than)"}`
+        } the shoulder plane. Within ${CHECK_TOLERANCES.leadArmDegrees}° counts as matching.`,
+      },
+      null,
+    ],
+  };
+}
+
+function extensionRow(extension: Extension): RowContent {
+  if (extension.atTop === undefined && extension.atImpact === undefined) {
+    return { line: <span className={muted}>Mark Top or Impact</span> };
+  }
+
+  const cell = (label: string, inches?: number): Cell | null => {
+    if (inches === undefined) {
+      return null;
+    }
+
+    const ok = inches <= CHECK_TOLERANCES.extensionInches;
+    const where =
+      Math.abs(inches) < STEADY_INCHES
+        ? "on the line"
+        : `${Math.abs(inches).toFixed(1)} in ${inches > 0 ? "toward the ball" : "behind the line"}`;
+    return {
+      text: extensionArrow(inches, extension.ballSide),
+      tone: ok ? "good" : "warn",
+      title: `Butt at ${label}: ${where} (approximate). More than ${CHECK_TOLERANCES.extensionInches} in toward the ball is early extension; on or behind the line is good.`,
+    };
+  };
+
+  return {
+    cells: [
+      { text: "line", tone: "muted", title: "The dashed line marks your butt at Address." },
+      cell("Top", extension.atTop),
+      cell("Impact", extension.atImpact),
+    ],
+  };
 }
 
 function HeightField({ height, onSetHeight }: { height: GolferHeight; onSetHeight: (inches: number) => void }) {
