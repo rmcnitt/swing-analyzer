@@ -691,6 +691,8 @@ function WorkspaceView({
   const poseVersion = poseStore.getVersion();
 
   useEffect(() => {
+    // Syncs from the external pose store (analysis finishes asynchronously).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     applyPendingAutoPositions();
   }, [poseVersion, session.panes]);
 

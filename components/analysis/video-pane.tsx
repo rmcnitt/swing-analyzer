@@ -322,6 +322,8 @@ export function VideoPane({
 
   useEffect(() => {
     if (pendingFocus && pendingFocusTime !== undefined && swingCheckOn) {
+      // Runs when async pose analysis makes the position known; the jump is a parent update.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPendingFocus(null);
       onJumpToPosition(pane.id, pendingFocus);
     }
@@ -500,6 +502,13 @@ export function VideoPane({
     });
   }, [video?.id, video?.title]);
 
+  const stageAspectRatio = getVideoAspectRatio(video);
+  const stageSize = getContainedStageSize(
+    viewportSize.width,
+    viewportSize.height,
+    stageAspectRatio,
+  );
+
   const togglePlayback = () => syncGroup.togglePlay(pane.id);
 
   const seekTo = (time: number) => {
@@ -602,13 +611,6 @@ export function VideoPane({
       onUpdatePane(pane.id, { currentTime: Number(element.currentTime.toFixed(4)) });
     }
   };
-
-  const stageAspectRatio = getVideoAspectRatio(video);
-  const stageSize = getContainedStageSize(
-    viewportSize.width,
-    viewportSize.height,
-    stageAspectRatio,
-  );
 
   const canRenameVideo = Boolean(video);
   const userVideos = videos.filter((option) => option.sourceType !== "reference");
