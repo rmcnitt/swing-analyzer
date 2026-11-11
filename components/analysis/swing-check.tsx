@@ -163,7 +163,7 @@ export function SwingChecksPanel({
         <button
           type="button"
           onClick={onAnalyze}
-          className="ml-auto h-6 shrink-0 bg-[color:var(--color-accent)] px-2 text-[11px] font-medium text-[color:var(--color-ink)]"
+          className="ml-auto h-6 shrink-0 bg-[color:var(--color-accent)] px-2 text-[12px] font-medium text-[color:var(--color-ink)]"
         >
           {pose.status === "error" ? "Try again" : "Analyze swing"}
         </button>
@@ -194,7 +194,7 @@ export function SwingChecksPanel({
                 onClick={() => onJump(label)}
                 aria-pressed={current}
                 className={cn(
-                  "h-7 flex-1 text-[11px] pointer-coarse:h-9 disabled:opacity-35",
+                  "h-8 flex-1 text-[12px] pointer-coarse:h-9 disabled:opacity-35",
                   current
                     ? "bg-[color:var(--color-accent)] font-medium text-[color:var(--color-ink)]"
                     : "text-white/80 hover:bg-white/[0.08] hover:text-white",
@@ -223,7 +223,7 @@ export function SwingChecksPanel({
 
   return (
     <div
-      className="absolute left-2 top-2 z-10 w-[min(14.5rem,calc(100%-1rem))] border border-white/10 bg-black/75 text-[11px] text-white shadow-lg backdrop-blur-sm"
+      className="absolute left-2 top-2 z-10 w-[min(16rem,calc(100%-1rem))] border border-white/10 bg-black/75 text-[12px] text-white shadow-lg backdrop-blur-sm"
       // Keep clicks here from panning or drawing on the video underneath.
       onPointerDown={(event) => event.stopPropagation()}
       role="region"
@@ -231,7 +231,7 @@ export function SwingChecksPanel({
     >
       <div className="flex items-center gap-1.5 py-1 pl-2.5 pr-1">
         <Gauge className="size-3.5 shrink-0 text-[color:var(--color-accent)]" aria-hidden />
-        <span className="text-[10px] font-medium uppercase tracking-[0.14em]">Swing checks</span>
+        <span className="text-[11px] font-medium uppercase tracking-[0.14em]">Swing checks</span>
         <button
           type="button"
           onClick={() => setCollapsed((value) => !value)}
@@ -274,7 +274,7 @@ function CheckRow({
         type="button"
         onClick={onToggle}
         aria-pressed={on}
-        className="flex w-[3.9rem] shrink-0 items-center gap-1.5 text-left pointer-coarse:min-h-9"
+        className="flex w-[4.3rem] shrink-0 items-center gap-1.5 text-left pointer-coarse:min-h-9"
         title={on ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
       >
         <span
@@ -293,7 +293,7 @@ function CheckRow({
         </span>
         <span className={on ? "text-white" : muted}>{label}</span>
       </button>
-      {on ? <div className="min-w-0 flex-1 leading-4">{children}</div> : null}
+      {on ? <div className="min-w-0 flex-1 leading-[18px]">{children}</div> : null}
     </li>
   );
 }
@@ -305,7 +305,7 @@ function TempoValue({ tempo }: { tempo: Tempo | null }) {
 
   return (
     <span title={`Backswing ÷ downswing. Tour players average about ${TOUR_TEMPO} : 1.`}>
-      <span className="font-mono text-[12px]">{tempo.ratio.toFixed(1)}:1</span>{" "}
+      <span className="font-mono text-[13px]">{tempo.ratio.toFixed(1)}:1</span>{" "}
       <span className={muted}>
         {tempo.backswing.toFixed(2)} / {tempo.downswing.toFixed(2)}s
       </span>
@@ -332,7 +332,7 @@ function HeadValue({ head }: { head: HeadMovement | null }) {
       {rows.map(([label, shift]) =>
         shift ? (
           <div key={label} className="whitespace-nowrap">
-            <span className={cn("inline-block w-10", muted)}>{label}</span>
+            <span className={cn("inline-block w-11", muted)}>{label}</span>
             {describeHeadShift(shift, head.view, { short: true })}
           </div>
         ) : null,
@@ -382,7 +382,7 @@ function HeightField({ height, onSetHeight }: { height: GolferHeight; onSetHeigh
     setEditing(false);
   };
   const field =
-    "h-6 w-9 border border-white/15 bg-black/60 px-1 text-center text-[11px] text-white outline-none focus:border-[color:var(--color-accent)] pointer-coarse:h-9";
+    "h-6 w-9 border border-white/15 bg-black/60 px-1 text-center text-[12px] text-white outline-none focus:border-[color:var(--color-accent)] pointer-coarse:h-9";
 
   return (
     <form
