@@ -57,6 +57,8 @@ export interface VideoAsset {
   mimeType?: string;
   /** Where the golfer is in the frame; used to frame golfers alike when comparing. */
   golferBox?: NormalizedRect;
+  /** The golfer's height (inches) for swing-check measurements; reference clips only. */
+  golferHeightInches?: number;
   orientation: SwingOrientation;
   clubTag: string;
   uploadStatus: UploadStatus;
@@ -85,10 +87,13 @@ export interface AnalysisPane {
   poseVisible?: boolean;
   /** "<videoId>@<detection version>" once that clip's detected positions were added. */
   autoPositionsFor?: string;
-  /** Show the Swing check box (tempo, head movement) and its traces. */
+  /** Show the Swing checks panel. */
   swingCheck?: boolean;
-  hideHeadTrace?: boolean;
+  /** Which swing checks are switched on (unset ones use their default). */
+  checks?: Partial<Record<SwingCheckId, boolean>>;
 }
+
+export type SwingCheckId = "tempo" | "head" | "posture" | "extension" | "leadArm";
 
 export type AnnotationGeometry =
   | {

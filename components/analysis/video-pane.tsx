@@ -50,10 +50,21 @@ import { PoseOverlay } from "@/components/analysis/pose-overlay";
 import { drawSkeleton } from "@/lib/pose/draw-skeleton";
 import { frameIndexNear } from "@/lib/pose/landmarks";
 import type { PoseState, PoseStore } from "@/lib/pose/pose-store";
-import { SwingCheckCard, SwingTraceOverlay, type SwingCheckData } from "@/components/analysis/swing-check";
+import {
+  SwingCheckOverlay,
+  SwingChecksPanel,
+  type GolferHeight,
+  type SwingCheckData,
+} from "@/components/analysis/swing-check";
 import { aspectOf, autoSwingPhases } from "@/lib/pose/derived";
-import { drawSwingTraces } from "@/lib/pose/draw-traces";
-import { buildSwingTraces, headMovement, swingTempo } from "@/lib/pose/swing-check";
+import { drawSwingChecks, type CheckVisibility } from "@/lib/pose/draw-checks";
+import {
+  buildCheckGuides,
+  headMovement,
+  isCheckOn,
+  SWING_CHECKS,
+  swingTempo,
+} from "@/lib/pose/swing-check";
 import type {
   AnalysisPane,
   AnnotationObject,
@@ -63,6 +74,7 @@ import type {
   NormalizedRect,
   PaneId,
   SnapshotMarker,
+  SwingCheckId,
   VideoAsset,
 } from "@/lib/types";
 import { clamp, cn, formatTimecode, getVideoLabel } from "@/lib/utils";
@@ -110,6 +122,9 @@ interface VideoPaneProps {
   onAnnotationsChange: (paneId: PaneId, annotations: AnnotationObject[]) => void;
   onJumpToPosition: (paneId: PaneId, label: string) => void;
   onSetGolferBox: (videoId: string, box: NormalizedRect) => void;
+  /** Height used to turn this clip's swing-check movement into inches. */
+  golferHeight: GolferHeight;
+  onSetGolferHeight: (videoId: string, inches: number) => void;
   /** Registers this pane's frame capture (video + drawings) for PNG export. */
   onRegisterCapture: (paneId: PaneId, capture: (() => HTMLCanvasElement | null) | null) => void;
   onMarkPosition: (paneId: PaneId, label: string, time: number) => void;
@@ -156,6 +171,8 @@ export function VideoPane({
   onJumpToPosition,
   onMarkPosition,
   onSetGolferBox,
+  golferHeight,
+  onSetGolferHeight,
   onRegisterCapture,
 }: VideoPaneProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -237,7 +254,16 @@ export function VideoPane({
   }, [poseStore, video?.id, playbackProblem]);
 
   const swingCheckOn = Boolean(pane.swingCheck && video && !playbackProblem);
-  const traceVisibility = { head: !pane.hideHeadTrace };
+  const checkVisibility = useMemo(() => {
+    const visible: CheckVisibility = {};
+
+    for (const check of SWING_CHECKS) {
+      visible[check.id] = isCheckOn(pane.checks, check.id);
+    }
+
+    return visible;
+  }, [pane.checks]);
+  const heightInches = golferHeight.inches;
   const addressTime = positions.get("address");
   const topTime = positions.get("top");
   const impactTime = positions.get("impact");
@@ -254,14 +280,15 @@ export function VideoPane({
     const frame = { width: frameWidth, height: frameHeight };
     const phases = autoSwingPhases(poseTrack, frame);
     const times = { address: addressTime, top: topTime, impact: impactTime };
+    const aspect = aspectOf(frame);
     const data: SwingCheckData = {
       tempo: swingTempo({ start: phases?.motionStart, top: topTime, impact: impactTime }),
-      head: headMovement(poseTrack, times, aspectOf(frame)),
+      head: headMovement(poseTrack, times, aspect, { heightInches }),
       noSwing: !phases,
     };
 
-    return { data, traces: buildSwingTraces(poseTrack, times, aspectOf(frame)) };
-  }, [swingCheckOn, poseTrack, frameWidth, frameHeight, addressTime, topTime, impactTime]);
+    return { data, guides: buildCheckGuides(poseTrack, times, aspect) };
+  }, [swingCheckOn, poseTrack, frameWidth, frameHeight, addressTime, topTime, impactTime, heightInches]);
 
   const analyzePose = () => {
     if (video) {
@@ -269,7 +296,51 @@ export function VideoPane({
     }
   };
 
-  const toggleSwingCheck = () => onUpdatePane(pane.id, { swingCheck: !pane.swingCheck });
+  // Opening the panel or switching a check on goes to the position that check is judged at (e.g.
+  // Address for the head). If that position isn't known yet (still analyzing), go once it is.
+  const [pendingFocus, setPendingFocus] = useState<string | null>(null);
+  const pendingFocusTime = pendingFocus ? positions.get(pendingFocus.toLowerCase()) : undefined;
+
+  const focusOn = (label: string | undefined) => {
+    if (!label) {
+      return;
+    }
+
+    if (positions.has(label.toLowerCase())) {
+      setPendingFocus(null);
+      onJumpToPosition(pane.id, label);
+    } else {
+      setPendingFocus(label);
+    }
+  };
+
+  useEffect(() => {
+    if (pendingFocus && pendingFocusTime !== undefined && swingCheckOn) {
+      setPendingFocus(null);
+      onJumpToPosition(pane.id, pendingFocus);
+    }
+  }, [pendingFocus, pendingFocusTime, swingCheckOn, onJumpToPosition, pane.id]);
+
+  const toggleSwingCheck = () => {
+    const opening = !pane.swingCheck;
+    onUpdatePane(pane.id, { swingCheck: opening });
+
+    if (opening) {
+      // The first switched-on check that cares about a position decides where to go.
+      focusOn(SWING_CHECKS.find((check) => check.focus && checkVisibility[check.id])?.focus);
+    } else {
+      setPendingFocus(null);
+    }
+  };
+
+  const toggleCheck = (id: SwingCheckId) => {
+    const on = !isCheckOn(pane.checks, id);
+    onUpdatePane(pane.id, { checks: { ...pane.checks, [id]: on } });
+
+    if (on) {
+      focusOn(SWING_CHECKS.find((check) => check.id === id)?.focus);
+    }
+  };
 
   // With the Swing check open, a clip that hasn't been analyzed is analyzed right away (also when
   // the click lands while the cache is still being checked, or a new clip is loaded). Not after an
@@ -462,9 +533,19 @@ export function VideoPane({
       }
     }
 
-    if (swingCheck) {
+    if (swingCheck && poseTrack) {
       const scale = stageSize.width > 0 ? canvas.width / stageSize.width : 1;
-      drawSwingTraces(context, swingCheck.traces, traceVisibility, canvas.width, canvas.height, scale);
+      const index = frameIndexNear(poseTrack, element.currentTime);
+      drawSwingChecks(
+        context,
+        poseTrack,
+        index,
+        swingCheck.guides,
+        checkVisibility,
+        canvas.width,
+        canvas.height,
+        scale,
+      );
     }
 
     if (pane.overlayVisible) {
@@ -912,10 +993,12 @@ export function VideoPane({
                   />
                 ) : null}
 
-                {swingCheck ? (
-                  <SwingTraceOverlay
-                    traces={swingCheck.traces}
-                    visible={traceVisibility}
+                {swingCheck && poseTrack ? (
+                  <SwingCheckOverlay
+                    track={poseTrack}
+                    guides={swingCheck.guides}
+                    visible={checkVisibility}
+                    timeStore={timeStore}
                     width={stageSize.width}
                     height={stageSize.height}
                   />
@@ -949,13 +1032,19 @@ export function VideoPane({
               </div>
 
               {swingCheckOn ? (
-                <SwingCheckCard
+                <SwingChecksPanel
                   pose={poseState}
                   data={swingCheck?.data ?? null}
-                  visible={traceVisibility}
-                  onToggle={() => onUpdatePane(pane.id, { hideHeadTrace: !pane.hideHeadTrace })}
+                  checks={pane.checks}
+                  positions={positions}
+                  timeStore={timeStore}
+                  frameTolerance={frameDuration(video.fps) / 2}
+                  height={golferHeight}
+                  onToggleCheck={toggleCheck}
+                  onJump={(label) => onJumpToPosition(pane.id, label)}
+                  onSetHeight={(inches) => onSetGolferHeight(video.id, inches)}
                   onAnalyze={analyzePose}
-                  onClose={() => onUpdatePane(pane.id, { swingCheck: false })}
+                  onClose={toggleSwingCheck}
                 />
               ) : null}
 

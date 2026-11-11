@@ -1,9 +1,33 @@
 import { frameIndexNear, hasPose, landmarkAt, LM, type PoseTrack } from "@/lib/pose/landmarks";
+import type { SwingCheckId } from "@/lib/types";
 
 /**
- * "Swing check": tempo and head movement, built only on what pose estimation tracks reliably
- * (hands, head, legs) and on the swing positions.
+ * "Swing checks": tempo, head movement and (down-the-line) posture checks, measured from the pose
+ * track at the swing positions. Each check is switched on or off per pane.
  */
+
+export interface SwingCheckInfo {
+  id: SwingCheckId;
+  label: string;
+  /** Position to jump to when the check is switched on (where it is judged). */
+  focus?: "Address" | "Top";
+  defaultOn: boolean;
+}
+
+export const SWING_CHECKS: readonly SwingCheckInfo[] = [
+  { id: "tempo", label: "Tempo", defaultOn: true },
+  { id: "head", label: "Head", focus: "Address", defaultOn: true },
+];
+
+export function isCheckOn(checks: Partial<Record<SwingCheckId, boolean>> | undefined, id: SwingCheckId) {
+  return checks?.[id] ?? SWING_CHECKS.find((check) => check.id === id)?.defaultOn ?? false;
+}
+
+/** Where each check turns from fine to worth a look; easy to tune. */
+export const CHECK_TOLERANCES = {
+  /** Head shift (straight-line inches) from Address. */
+  headInches: 2,
+} as const;
 
 export interface Tempo {
   /** Seconds from the start of the takeaway to the top. */
@@ -24,14 +48,6 @@ export function swingTempo({ start, top, impact }: { start?: number; top?: numbe
   const backswing = top - start;
   const downswing = impact - top;
   return { backswing, downswing, ratio: backswing / downswing } satisfies Tempo;
-}
-
-export interface PathPoint {
-  /** Normalized 0–1 frame coordinates. */
-  x: number;
-  y: number;
-  /** Media time (seconds). */
-  t: number;
 }
 
 const VISIBLE = 0.5;
@@ -71,17 +87,13 @@ export function headSource(track: PoseTrack, from: number, to: number): HeadSour
   return frames.length > 0 && bothEars >= frames.length * 0.8 ? "ears" : "nose";
 }
 
-function headAt(track: PoseTrack, index: number, source: HeadSource) {
+export function headAt(track: PoseTrack, index: number, source: HeadSource) {
   if (source === "ears") {
     return midpoint(track, index, LM.leftEar, LM.rightEar);
   }
 
   const nose = landmarkAt(track, index, LM.nose);
   return { x: nose.x, y: nose.y };
-}
-
-export function headPath(track: PoseTrack, from: number, to: number, source = headSource(track, from, to)) {
-  return framesBetween(track, from, to).map((index) => ({ ...headAt(track, index, source), t: track.times[index] }));
 }
 
 export type CameraView = "face-on" | "down-the-line" | "unknown";
@@ -110,8 +122,22 @@ export function detectCameraView(track: PoseTrack, index: number, aspect = 1): C
   return ratio >= 0.5 ? "face-on" : ratio <= 0.35 ? "down-the-line" : "unknown";
 }
 
-/** Leg length (hip joint to ankle) assumed for converting to inches: about a 5'10" golfer. */
-export const ASSUMED_LEG_INCHES = 33;
+/** Height used when the golfer's own isn't set (5'10"). */
+export const AVERAGE_HEIGHT_INCHES = 70;
+export const MIN_HEIGHT_INCHES = 48;
+export const MAX_HEIGHT_INCHES = 90;
+/** Hip joint to ankle as a share of standing height (33 in at 5'10"). */
+export const LEG_SHARE_OF_HEIGHT = 33 / 70;
+
+export function clampHeight(inches: number) {
+  return Math.min(MAX_HEIGHT_INCHES, Math.max(MIN_HEIGHT_INCHES, Math.round(inches)));
+}
+
+/** 70 → `5'10"`. */
+export function formatHeight(inches: number) {
+  const rounded = Math.round(inches);
+  return `${Math.floor(rounded / 12)}'${rounded % 12}"`;
+}
 
 export interface HeadShift {
   /**
@@ -142,13 +168,29 @@ function legLength(track: PoseTrack, index: number, aspect: number) {
 }
 
 /**
+ * Inches per frame-height unit at frame `index`, using the golfer's leg length in the image as the
+ * ruler (legs are tracked well and barely change length during the swing). 0 if it can't tell.
+ */
+export function inchesPerUnit(track: PoseTrack, index: number, aspect = 1, heightInches = AVERAGE_HEIGHT_INCHES) {
+  const legs = hasPose(track, index) ? legLength(track, index, aspect) : 0;
+  return legs > 0 ? (heightInches * LEG_SHARE_OF_HEIGHT) / legs : 0;
+}
+
+export interface CheckOptions {
+  /** The golfer's height, for converting to inches. */
+  heightInches?: number;
+}
+
+/**
  * How far the head moved from Address by Top and by Impact, in approximate inches (scaled by the
- * golfer's leg length in the image), with the horizontal turned into golf directions.
+ * golfer's leg length in the image and their height), with the horizontal turned into golf
+ * directions.
  */
 export function headMovement(
   track: PoseTrack,
   { address, top, impact }: { address?: number; top?: number; impact?: number },
   aspect = 1,
+  { heightInches = AVERAGE_HEIGHT_INCHES }: CheckOptions = {},
 ): HeadMovement | null {
   if (address === undefined) {
     return null;
@@ -163,14 +205,12 @@ export function headMovement(
   const end = impact ?? top ?? address;
   const source = headSource(track, address, end);
   const view = detectCameraView(track, start, aspect);
-  const legs = legLength(track, start, aspect);
+  const scale = inchesPerUnit(track, start, aspect, heightInches);
 
-  if (!(legs > 0)) {
+  if (!(scale > 0)) {
     return null;
   }
 
-  // Inches per frame-height unit.
-  const scale = ASSUMED_LEG_INCHES / legs;
   const handsAtAddress = midpoint(track, start, LM.leftWrist, LM.rightWrist);
   const topIndex = top === undefined ? -1 : frameIndexNear(track, top);
   let forwardSign = 1;
@@ -206,52 +246,85 @@ export function headMovement(
 /** Below this the head counts as not having moved that way. */
 export const STEADY_INCHES = 0.25;
 
-/** e.g. "≈1.1 in down · 0.6 in toward target", or "steady". */
-export function describeHeadShift(shift: HeadShift, view: CameraView) {
-  const [toward, away] =
-    view === "face-on"
-      ? ["toward target", "away from target"]
-      : view === "down-the-line"
-        ? ["toward ball", "away from ball"]
-        : ["right", "left"];
+const DIRECTION_WORDS = {
+  long: {
+    "face-on": ["toward target", "away from target"],
+    "down-the-line": ["toward ball", "away from ball"],
+    unknown: ["right", "left"],
+  },
+  short: {
+    "face-on": ["fwd", "back"],
+    "down-the-line": ["to ball", "off ball"],
+    unknown: ["right", "left"],
+  },
+} as const;
+
+/**
+ * e.g. "≈1.1 in down · 0.6 in toward target", or "steady". `short` gives the panel's compact form,
+ * "1.1″ down · 0.6″ fwd" (fwd/back = toward/away from the target face-on).
+ */
+export function describeHeadShift(shift: HeadShift, view: CameraView, { short = false } = {}) {
+  const [toward, away] = DIRECTION_WORDS[short ? "short" : "long"][view];
+  const unit = short ? "″" : " in";
   const parts: string[] = [];
 
   if (Math.abs(shift.down) >= STEADY_INCHES) {
-    parts.push(`${Math.abs(shift.down).toFixed(1)} in ${shift.down > 0 ? "down" : "up"}`);
+    parts.push(`${Math.abs(shift.down).toFixed(1)}${unit} ${shift.down > 0 ? "down" : "up"}`);
   }
 
   if (Math.abs(shift.forward) >= STEADY_INCHES) {
-    parts.push(`${Math.abs(shift.forward).toFixed(1)} in ${shift.forward > 0 ? toward : away}`);
+    parts.push(`${Math.abs(shift.forward).toFixed(1)}${unit} ${shift.forward > 0 ? toward : away}`);
   }
 
-  return parts.length > 0 ? `≈${parts.join(" · ")}` : "steady";
+  if (parts.length === 0) {
+    return "steady";
+  }
+
+  return short ? parts.join(" · ") : `≈${parts.join(" · ")}`;
 }
 
-export interface SwingTraces {
-  /** Head path from Address to Impact; `radius` (frame-height units) sizes the address ring. */
-  head: { points: PathPoint[]; radius: number } | null;
+/** Straight-line distance of a head shift, in inches. */
+export function shiftDistance(shift: HeadShift) {
+  return Math.hypot(shift.forward, shift.down);
 }
 
-/** What to draw for a clip, given its swing positions (seconds; marked or detected). */
-export function buildSwingTraces(
+/** Whether the head stayed within tolerance at both Top and Impact. */
+export function headWithinTolerance(movement: HeadMovement) {
+  return [movement.atTop, movement.atImpact].every(
+    (shift) => !shift || shiftDistance(shift) <= CHECK_TOLERANCES.headInches,
+  );
+}
+
+export interface Point2 {
+  x: number;
+  y: number;
+}
+
+/** What the video overlay needs for each check, fixed for the clip (the live parts follow playback). */
+export interface CheckGuides {
+  /** Address head position (normalized) and a ring radius in frame-height units. */
+  head?: { source: HeadSource; origin: Point2; radius: number };
+}
+
+/** Overlay guides for a clip, given its swing positions (seconds; marked or detected). */
+export function buildCheckGuides(
   track: PoseTrack,
   { address, top, impact }: { address?: number; top?: number; impact?: number },
   aspect = 1,
-): SwingTraces {
-  if (address === undefined) {
-    return { head: null };
+): CheckGuides {
+  const start = address === undefined ? -1 : frameIndexNear(track, address);
+
+  if (address === undefined || start < 0 || !hasPose(track, start)) {
+    return {};
   }
 
-  const headEnd = impact ?? top;
-  const start = frameIndexNear(track, address);
-  let head: SwingTraces["head"] = null;
+  const guides: CheckGuides = {};
+  const headEnd = impact ?? top ?? address;
+  const source = headSource(track, address, headEnd);
+  // About the head's half-height (~4.5 in against ~33 in of leg). Leg length is a steadier ruler
+  // than the face, which tilts down at address.
+  const radius = Math.max(0.01, legLength(track, start, aspect) * 0.13);
+  guides.head = { source, origin: headAt(track, start, source), radius };
 
-  if (headEnd !== undefined && headEnd > address && start >= 0 && hasPose(track, start)) {
-    // About the head's half-height (~4.5 in against ~33 in of leg). Leg length is a steadier
-    // ruler than the face, which tilts down at address.
-    const radius = Math.max(0.01, legLength(track, start, aspect) * 0.13);
-    head = { points: headPath(track, address, headEnd), radius };
-  }
-
-  return { head: head && head.points.length > 0 ? head : null };
+  return guides;
 }

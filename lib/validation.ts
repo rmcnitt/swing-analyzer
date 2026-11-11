@@ -26,6 +26,7 @@ export const videoSchema = z.object({
   fpsSource: z.enum(["detected", "manual"]).optional(),
   mimeType: z.string().optional(),
   golferBox: normalizedRectSchema.optional(),
+  golferHeightInches: z.number().min(36).max(108).optional(),
   orientation: z.enum(["face-on", "down-the-line"]),
   clubTag: z.string(),
   uploadStatus: z.enum(["ready", "processing"]),
@@ -129,7 +130,16 @@ export const sessionSchema = z.object({
       poseVisible: z.boolean().optional(),
       autoPositionsFor: z.string().optional(),
       swingCheck: z.boolean().optional(),
-      hideHeadTrace: z.boolean().optional(),
+      checks: z
+        .object({
+          tempo: z.boolean(),
+          head: z.boolean(),
+          posture: z.boolean(),
+          extension: z.boolean(),
+          leadArm: z.boolean(),
+        })
+        .partial()
+        .optional(),
     }),
   ),
   annotations: z.object({

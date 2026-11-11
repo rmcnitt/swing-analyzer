@@ -76,6 +76,7 @@ import {
 } from "@/lib/pose/auto-positions";
 import { cleanTrack } from "@/lib/pose/clean-track";
 import { autoGolferBox, autoSwingPositions } from "@/lib/pose/derived";
+import { AVERAGE_HEIGHT_INCHES, clampHeight } from "@/lib/pose/swing-check";
 import type { PlaybackProblem } from "@/lib/video/playback-errors";
 import { createVideoThumbnail, detectVideoFps, readVideoMetadata, type VideoFileMetadata } from "@/lib/video/media";
 
@@ -174,7 +175,7 @@ function loadReferenceIntoSecondary(
   };
 }
 
-type VideoMetadataPatch = Partial<VideoFileMetadata> & Pick<VideoAsset, "golferBox">;
+type VideoMetadataPatch = Partial<VideoFileMetadata> & Pick<VideoAsset, "golferBox" | "golferHeightInches">;
 
 function replacePane(
   panes: AnalysisPane[],
@@ -221,6 +222,11 @@ function WorkspaceView({
   const [strokeWidth, setStrokeWidth] = useState(() => {
     const saved = Number(loadUiPreference("stroke-width"));
     return STROKE_WIDTHS.some((width) => width === saved) ? saved : DEFAULT_STROKE_WIDTH;
+  });
+  // The user's own height, for swing-check inches on their swings (references carry their own).
+  const [profileHeight, setProfileHeight] = useState(() => {
+    const saved = Number(loadUiPreference("golfer-height"));
+    return saved > 0 ? clampHeight(saved) : null;
   });
   const [selectedAnnotationByPane, setSelectedAnnotationByPane] = useState<
     Partial<Record<PaneId, string | null>>
@@ -647,6 +653,22 @@ function WorkspaceView({
     void updateStoredVideoMetadata(videoId, { golferBox });
   };
 
+  const golferHeightFor = (video: VideoAsset | undefined) =>
+    video?.sourceType === "reference"
+      ? { inches: video.golferHeightInches ?? AVERAGE_HEIGHT_INCHES, scope: "clip" as const }
+      : { inches: profileHeight ?? AVERAGE_HEIGHT_INCHES, scope: "profile" as const };
+
+  const handleSetGolferHeight = (videoId: string, inches: number) => {
+    if (getVideo(videoId)?.sourceType === "reference") {
+      handleVideoMetadata(videoId, { golferHeightInches: inches });
+      void updateStoredVideoMetadata(videoId, { golferHeightInches: inches });
+      return;
+    }
+
+    setProfileHeight(inches);
+    saveUiPreference("golfer-height", String(inches));
+  };
+
   /** Detected positions for a clip: undefined until its pose is ready, null if no swing found. */
   const detectPositions = (videoId: string) => {
     const track = poseStore.get(videoId).track;
@@ -1050,6 +1072,8 @@ function WorkspaceView({
                 onJumpToPosition={handleJumpToPosition}
                 onMarkPosition={addMarker}
                 onSetGolferBox={handleSetGolferBox}
+                golferHeight={golferHeightFor(getVideo(pane.videoId))}
+                onSetGolferHeight={handleSetGolferHeight}
                 onRegisterCapture={registerCapture}
               />
             ))}

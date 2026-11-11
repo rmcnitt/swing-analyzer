@@ -10,12 +10,18 @@ import {
   type PoseTrack,
 } from "@/lib/pose/landmarks";
 import {
+  AVERAGE_HEIGHT_INCHES,
+  buildCheckGuides,
+  clampHeight,
   describeHeadShift,
   detectCameraView,
+  formatHeight,
   headMovement,
   headSource,
+  headWithinTolerance,
+  inchesPerUnit,
+  isCheckOn,
   swingTempo,
-  buildSwingTraces,
 } from "@/lib/pose/swing-check";
 import { detectSwingPhases } from "@/lib/pose/swing-positions";
 import { loadPoseFixture } from "@/tests/helpers/pose-fixtures";
@@ -142,29 +148,82 @@ describe("describeHeadShift", () => {
     expect(describeHeadShift({ forward: 0.4, down: 0 }, "unknown")).toBe("≈0.4 in right");
   });
 
+  it("has a compact form for the panel", () => {
+    expect(describeHeadShift({ forward: -0.8, down: 1.8 }, "face-on", { short: true })).toBe("1.8″ down · 0.8″ back");
+    expect(describeHeadShift({ forward: 0.6, down: 0 }, "down-the-line", { short: true })).toBe("0.6″ to ball");
+  });
+
   it("calls tiny movement steady", () => {
     expect(describeHeadShift({ forward: 0.1, down: -0.2 }, "face-on")).toBe("steady");
   });
 });
 
-describe("buildSwingTraces", () => {
-  it("builds the head trace from the positions", () => {
+describe("golfer height", () => {
+  it("scales inches with the golfer's height", () => {
     const { track, phases } = sample("sample-video-face-on");
-    const traces = buildSwingTraces(
+    const times = { address: phases.Address, top: phases.Top, impact: phases.Impact };
+    const average = headMovement(track, times, PORTRAIT)!;
+    const short = headMovement(track, times, PORTRAIT, { heightInches: AVERAGE_HEIGHT_INCHES / 2 })!;
+
+    expect(short.atImpact!.down).toBeCloseTo(average.atImpact!.down / 2, 6);
+    expect(short.atTop!.forward).toBeCloseTo(average.atTop!.forward / 2, 6);
+  });
+
+  it("measures about 33 inches of leg on an average golfer", () => {
+    const { track, phases } = sample("sample-video-down-the-line");
+    const index = frameIndexNear(track, phases.Address!);
+    const perUnit = inchesPerUnit(track, index, PORTRAIT);
+
+    expect(perUnit).toBeGreaterThan(0);
+    expect(inchesPerUnit(track, index, PORTRAIT, 35)).toBeCloseTo(perUnit / 2, 6);
+  });
+
+  it("formats and clamps heights", () => {
+    expect(formatHeight(70)).toBe(`5'10"`);
+    expect(formatHeight(72)).toBe(`6'0"`);
+    expect(clampHeight(20)).toBe(48);
+    expect(clampHeight(71.6)).toBe(72);
+    expect(clampHeight(200)).toBe(90);
+  });
+});
+
+describe("check switches", () => {
+  it("uses each check's default until it is set", () => {
+    expect(isCheckOn(undefined, "tempo")).toBe(true);
+    expect(isCheckOn(undefined, "head")).toBe(true);
+    expect(isCheckOn({ head: false }, "head")).toBe(false);
+    expect(isCheckOn({}, "posture")).toBe(false);
+  });
+});
+
+describe("head tolerance", () => {
+  it("flags a head that moved more than two inches", () => {
+    const base = { view: "face-on" as const, source: "ears" as const };
+    expect(headWithinTolerance({ ...base, atTop: { forward: 1, down: 1 } })).toBe(true);
+    expect(headWithinTolerance({ ...base, atTop: { forward: 0.5, down: 0 }, atImpact: { forward: 0, down: 2.5 } })).toBe(
+      false,
+    );
+  });
+});
+
+describe("buildCheckGuides", () => {
+  it("rings the head at Address", () => {
+    const { track, phases } = sample("sample-video-face-on");
+    const guides = buildCheckGuides(
       track,
       { address: phases.Address, top: phases.Top, impact: phases.Impact },
       PORTRAIT,
     );
 
-    expect(traces.head!.points[0].t).toBeGreaterThanOrEqual(phases.Address! - 1e-6);
-    expect(traces.head!.points.at(-1)!.t).toBeLessThanOrEqual(phases.Impact! + 1e-6);
+    expect(guides.head!.origin.y).toBeGreaterThan(0);
+    expect(guides.head!.origin.y).toBeLessThan(0.5);
     // Roughly a head: 1–5% of the frame height in these portrait clips.
-    expect(traces.head!.radius).toBeGreaterThan(0.01);
-    expect(traces.head!.radius).toBeLessThan(0.05);
+    expect(guides.head!.radius).toBeGreaterThan(0.01);
+    expect(guides.head!.radius).toBeLessThan(0.05);
   });
 
-  it("draws nothing without an address", () => {
+  it("has nothing to draw without an address", () => {
     const { track, phases } = sample("sample-video-face-on");
-    expect(buildSwingTraces(track, { top: phases.Top, impact: phases.Impact })).toEqual({ head: null });
+    expect(buildCheckGuides(track, { top: phases.Top, impact: phases.Impact })).toEqual({});
   });
 });
