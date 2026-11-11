@@ -11,11 +11,15 @@ import {
   formatHeight,
   headWithinTolerance,
   isCheckOn,
+  postureWithinTolerance,
   SWING_CHECKS,
   TOUR_TEMPO,
+  CHECK_TOLERANCES,
   type CheckGuides,
   type HeadMovement,
+  type Posture,
   type Tempo,
+  type ViewGated,
 } from "@/lib/pose/swing-check";
 import type { SwingCheckId } from "@/lib/types";
 import type { TimeStore } from "@/lib/video/time-store";
@@ -81,6 +85,7 @@ export function SwingCheckOverlay({ track, guides, visible, timeStore, width, he
 export interface SwingCheckData {
   tempo: Tempo | null;
   head: HeadMovement | null;
+  posture: ViewGated<Posture> | null;
   /** Pose ran but found no full swing. */
   noSwing: boolean;
 }
@@ -212,6 +217,11 @@ export function SwingChecksPanel({
             <CheckRow key={check.id} label={check.label} on={on(check.id)} onToggle={() => onToggleCheck(check.id)}>
               {check.id === "tempo" ? <TempoValue tempo={data.tempo} /> : null}
               {check.id === "head" ? <HeadValue head={data.head} /> : null}
+              {check.id === "posture" ? (
+                <DownTheLine result={data.posture} missing="Mark Address">
+                  {(posture) => <PostureValue posture={posture} />}
+                </DownTheLine>
+              ) : null}
             </CheckRow>
           ))}
         </ul>
@@ -337,6 +347,67 @@ function HeadValue({ head }: { head: HeadMovement | null }) {
           </div>
         ) : null,
       )}
+    </div>
+  );
+}
+
+/** Shows a down-the-line check's value, or why there isn't one. */
+function DownTheLine<T>({
+  result,
+  missing,
+  children,
+}: {
+  result: ViewGated<T> | null;
+  missing: string;
+  children: (value: T) => React.ReactNode;
+}) {
+  if (!result) {
+    return <span className={muted}>{missing}</span>;
+  }
+
+  if (!result.ok) {
+    return (
+      <span className={muted} title="Filmed from behind the golfer, looking down the target line.">
+        Needs a down-the-line video
+      </span>
+    );
+  }
+
+  return children(result.value);
+}
+
+const degrees = (angle?: number) => (angle === undefined ? "—" : `${Math.round(angle)}°`);
+
+function PostureValue({ posture }: { posture: Posture }) {
+  if (posture.address === undefined) {
+    return <span className={muted}>Torso not clear at Address</span>;
+  }
+
+  // Report the position where the spine angle changed most.
+  const changes = (
+    [
+      ["Top", posture.top],
+      ["Impact", posture.impact],
+    ] as const
+  ).flatMap(([label, angle]) => (angle === undefined ? [] : [{ label, change: angle - posture.address! }]));
+  const biggest = changes.reduce<(typeof changes)[number] | undefined>(
+    (best, item) => (!best || Math.abs(item.change) > Math.abs(best.change) ? item : best),
+    undefined,
+  );
+  const held = postureWithinTolerance(posture);
+
+  return (
+    <div title="Spine angle above the ground (hip middle to shoulder middle) at Address → Top → Impact.">
+      <div className="font-mono text-[12px]">
+        {degrees(posture.address)} → {degrees(posture.top)} → {degrees(posture.impact)}
+      </div>
+      {biggest ? (
+        <div className={held ? good : warn}>
+          {held
+            ? `Held within ${CHECK_TOLERANCES.postureDegrees}°`
+            : `${biggest.change > 0 ? "Stood up" : "Bent over"} ${Math.abs(Math.round(biggest.change))}° by ${biggest.label}`}
+        </div>
+      ) : null}
     </div>
   );
 }

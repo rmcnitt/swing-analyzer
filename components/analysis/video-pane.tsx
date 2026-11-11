@@ -62,6 +62,7 @@ import {
   buildCheckGuides,
   headMovement,
   isCheckOn,
+  postureCheck,
   SWING_CHECKS,
   swingTempo,
 } from "@/lib/pose/swing-check";
@@ -284,6 +285,7 @@ export function VideoPane({
     const data: SwingCheckData = {
       tempo: swingTempo({ start: phases?.motionStart, top: topTime, impact: impactTime }),
       head: headMovement(poseTrack, times, aspect, { heightInches }),
+      posture: postureCheck(poseTrack, times, aspect),
       noSwing: !phases,
     };
 

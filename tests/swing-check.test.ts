@@ -21,6 +21,10 @@ import {
   headWithinTolerance,
   inchesPerUnit,
   isCheckOn,
+  postureChange,
+  postureCheck,
+  postureWithinTolerance,
+  spineAngle,
   swingTempo,
 } from "@/lib/pose/swing-check";
 import { detectSwingPhases } from "@/lib/pose/swing-positions";
@@ -224,6 +228,96 @@ describe("buildCheckGuides", () => {
 
   it("has nothing to draw without an address", () => {
     const { track, phases } = sample("sample-video-face-on");
-    expect(buildCheckGuides(track, { top: phases.Top, impact: phases.Impact })).toEqual({});
+    expect(buildCheckGuides(track, { top: phases.Top, impact: phases.Impact })).toEqual({ aspect: 1 });
+  });
+});
+
+type Points = Partial<Record<number, { x: number; y: number; visibility?: number }>>;
+
+/** A track with one frame per entry; unlisted landmarks sit mid-frame, fully visible. */
+function syntheticTrack(frames: Points[], spacing = 0.1): PoseTrack {
+  const times = frames.map((_, index) => (index + 0.5) * spacing);
+  const data = new Float32Array(times.length * FRAME_STRIDE);
+
+  frames.forEach((frame, index) => {
+    const points = Array.from({ length: LANDMARK_COUNT }, (_, landmark) => ({
+      x: frame[landmark]?.x ?? 0.5,
+      y: frame[landmark]?.y ?? 0.5,
+      visibility: frame[landmark]?.visibility ?? 0.9,
+    }));
+    writeFrame(data, index, points, points.map((point) => ({ ...point, z: 0 })));
+  });
+
+  return {
+    version: POSE_TRACK_VERSION,
+    videoId: "synthetic",
+    model: "test",
+    times,
+    data,
+    duration: times.length * spacing,
+    analyzedAt: "2026-11-10T00:00:00.000Z",
+  };
+}
+
+/** Torso with hips at (hx, 0.6) and shoulders `dx` across and 0.2 up (frame-height units). */
+function torso(hx: number, dx: number): Points {
+  return {
+    [LM.leftHip]: { x: hx, y: 0.6 },
+    [LM.rightHip]: { x: hx, y: 0.6 },
+    [LM.leftShoulder]: { x: hx + dx, y: 0.4 },
+    [LM.rightShoulder]: { x: hx + dx, y: 0.4 },
+  };
+}
+
+describe("spineAngle", () => {
+  it("measures the hip-to-shoulder line above the ground", () => {
+    const track = syntheticTrack([torso(0.4, 0.2), torso(0.4, 0), torso(0.6, -0.2), torso(0.4, 0.2 / Math.sqrt(3))]);
+
+    expect(spineAngle(track, 0)).toBeCloseTo(45, 5);
+    expect(spineAngle(track, 1)).toBeCloseTo(90, 5);
+    // Leaning the other way (a left-hander) reads the same.
+    expect(spineAngle(track, 2)).toBeCloseTo(45, 5);
+    expect(spineAngle(track, 3)).toBeCloseTo(60, 4);
+  });
+
+  it("uses the frame's aspect for horizontal distances", () => {
+    const track = syntheticTrack([torso(0.4, 0.2)]);
+    // 0.2 across at aspect 0.5 is 0.1 frame-heights: atan(0.2 / 0.1).
+    expect(spineAngle(track, 0, 0.5)).toBeCloseTo((Math.atan(2) * 180) / Math.PI, 5);
+  });
+
+  it("gives nothing when the torso isn't visible", () => {
+    const hidden = { ...torso(0.4, 0.2), [LM.leftShoulder]: { x: 0.6, y: 0.4, visibility: 0.1 } };
+    expect(spineAngle(syntheticTrack([hidden]), 0)).toBeUndefined();
+  });
+});
+
+describe("postureCheck", () => {
+  it("reads a plausible address spine angle on the down-the-line sample", () => {
+    const { track, phases } = sample("sample-video-down-the-line");
+    const result = postureCheck(track, { address: phases.Address, top: phases.Top, impact: phases.Impact }, PORTRAIT)!;
+
+    expect(result.ok).toBe(true);
+    const posture = result.ok ? result.value : {};
+    // Checked against the frames: ~57° at Address, ~60° at Top, ~56° at Impact.
+    expect(posture.address).toBeGreaterThan(50);
+    expect(posture.address).toBeLessThan(64);
+    expect(Math.abs(posture.top! - posture.address!)).toBeLessThan(8);
+    expect(Math.abs(posture.impact! - posture.address!)).toBeLessThan(8);
+  });
+
+  it("needs a down-the-line clip", () => {
+    const { track, phases } = sample("sample-video-face-on");
+    const result = postureCheck(track, { address: phases.Address, top: phases.Top, impact: phases.Impact }, PORTRAIT)!;
+
+    expect(result).toEqual({ view: "face-on", ok: false });
+  });
+
+  it("finds the biggest change from Address", () => {
+    expect(postureChange({ address: 55, top: 57, impact: 62 })).toBe(7);
+    expect(postureChange({ address: 55, top: 49, impact: 57 })).toBe(-6);
+    expect(postureChange({ address: 55 })).toBeUndefined();
+    expect(postureWithinTolerance({ address: 55, top: 58, impact: 51 })).toBe(true);
+    expect(postureWithinTolerance({ address: 55, impact: 62 })).toBe(false);
   });
 });

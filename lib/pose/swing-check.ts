@@ -17,6 +17,7 @@ export interface SwingCheckInfo {
 export const SWING_CHECKS: readonly SwingCheckInfo[] = [
   { id: "tempo", label: "Tempo", defaultOn: true },
   { id: "head", label: "Head", focus: "Address", defaultOn: true },
+  { id: "posture", label: "Posture", focus: "Address", defaultOn: false },
 ];
 
 export function isCheckOn(checks: Partial<Record<SwingCheckId, boolean>> | undefined, id: SwingCheckId) {
@@ -27,7 +28,16 @@ export function isCheckOn(checks: Partial<Record<SwingCheckId, boolean>> | undef
 export const CHECK_TOLERANCES = {
   /** Head shift (straight-line inches) from Address. */
   headInches: 2,
+  /** Spine angle change from Address, degrees. */
+  postureDegrees: 5,
 } as const;
+
+/** Swing position times (seconds), marked or detected. */
+export interface SwingTimes {
+  address?: number;
+  top?: number;
+  impact?: number;
+}
 
 export interface Tempo {
   /** Seconds from the start of the takeaway to the top. */
@@ -64,7 +74,7 @@ function framesBetween(track: PoseTrack, from: number, to: number) {
   return frames;
 }
 
-function midpoint(track: PoseTrack, index: number, a: number, b: number) {
+export function midpoint(track: PoseTrack, index: number, a: number, b: number) {
   const p = landmarkAt(track, index, a);
   const q = landmarkAt(track, index, b);
   return { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
@@ -220,9 +230,7 @@ export function headMovement(
     const handsAtTop = midpoint(track, topIndex, LM.leftWrist, LM.rightWrist);
     forwardSign = handsAtTop.x < handsAtAddress.x ? 1 : -1;
   } else if (view === "down-the-line") {
-    // At address the hands hang toward the ball, out in front of the hips.
-    const hips = midpoint(track, start, LM.leftHip, LM.rightHip);
-    forwardSign = handsAtAddress.x > hips.x ? 1 : -1;
+    forwardSign = ballSide(track, start);
   }
 
   const origin = headAt(track, start, source);
@@ -295,6 +303,91 @@ export function headWithinTolerance(movement: HeadMovement) {
   );
 }
 
+/**
+ * Down-the-line: which way the ball is on screen (+1 right, -1 left). At address the hands hang
+ * toward the ball, out in front of the hips.
+ */
+function ballSide(track: PoseTrack, start: number): 1 | -1 {
+  const hands = midpoint(track, start, LM.leftWrist, LM.rightWrist);
+  const hips = midpoint(track, start, LM.leftHip, LM.rightHip);
+  return hands.x > hips.x ? 1 : -1;
+}
+
+function allVisible(track: PoseTrack, index: number, landmarks: readonly number[]) {
+  return (
+    index >= 0 &&
+    hasPose(track, index) &&
+    landmarks.every((landmark) => landmarkAt(track, index, landmark).visibility >= VISIBLE)
+  );
+}
+
+const TORSO = [LM.leftShoulder, LM.rightShoulder, LM.leftHip, LM.rightHip] as const;
+
+/**
+ * Spine angle at frame `index`: the line from the middle of the hips to the middle of the
+ * shoulders, in degrees above flat ground (90 = standing straight up). Undefined if the torso
+ * isn't clearly visible.
+ */
+export function spineAngle(track: PoseTrack, index: number, aspect = 1) {
+  if (!allVisible(track, index, TORSO)) {
+    return undefined;
+  }
+
+  const hips = midpoint(track, index, LM.leftHip, LM.rightHip);
+  const shoulders = midpoint(track, index, LM.leftShoulder, LM.rightShoulder);
+  const rise = hips.y - shoulders.y;
+
+  return rise > 0 ? (Math.atan2(rise, Math.abs(shoulders.x - hips.x) * aspect) * 180) / Math.PI : undefined;
+}
+
+/**
+ * Checks judged down-the-line (posture, early extension, lead arm) only report numbers for a
+ * down-the-line clip; face-on they'd measure something else.
+ */
+export type ViewGated<T> = { view: CameraView } & ({ ok: true; value: T } | { ok: false });
+
+function gate<T>(track: PoseTrack, start: number, aspect: number, value: () => T): ViewGated<T> {
+  const view = detectCameraView(track, start, aspect);
+  return view === "down-the-line" ? { view, ok: true, value: value() } : { view, ok: false };
+}
+
+export interface Posture {
+  /** Spine angle above the ground, degrees. */
+  address?: number;
+  top?: number;
+  impact?: number;
+}
+
+/** Spine angle at Address, Top and Impact (down-the-line only). */
+export function postureCheck(track: PoseTrack, { address, top, impact }: SwingTimes, aspect = 1) {
+  const start = address === undefined ? -1 : frameIndexNear(track, address);
+
+  if (start < 0 || !hasPose(track, start)) {
+    return null;
+  }
+
+  const at = (time?: number) => (time === undefined ? undefined : spineAngle(track, frameIndexNear(track, time), aspect));
+  return gate(track, start, aspect, (): Posture => ({ address: at(address), top: at(top), impact: at(impact) }));
+}
+
+/** Biggest spine-angle change from Address (signed, + = more upright), or undefined. */
+export function postureChange(posture: Posture) {
+  if (posture.address === undefined) {
+    return undefined;
+  }
+
+  const changes = [posture.top, posture.impact]
+    .filter((angle) => angle !== undefined)
+    .map((angle) => angle - posture.address!);
+
+  return changes.length > 0 ? changes.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a)) : undefined;
+}
+
+export function postureWithinTolerance(posture: Posture) {
+  const change = postureChange(posture);
+  return change === undefined || Math.abs(change) <= CHECK_TOLERANCES.postureDegrees;
+}
+
 export interface Point2 {
   x: number;
   y: number;
@@ -302,29 +395,40 @@ export interface Point2 {
 
 /** What the video overlay needs for each check, fixed for the clip (the live parts follow playback). */
 export interface CheckGuides {
+  /** The clip's width / height, so live measurements match the panel's. */
+  aspect: number;
   /** Address head position (normalized) and a ring radius in frame-height units. */
   head?: { source: HeadSource; origin: Point2; radius: number };
+  /** Address spine, hip middle to shoulder middle (normalized); down-the-line only. */
+  posture?: { hips: Point2; shoulders: Point2 };
 }
 
 /** Overlay guides for a clip, given its swing positions (seconds; marked or detected). */
 export function buildCheckGuides(
   track: PoseTrack,
-  { address, top, impact }: { address?: number; top?: number; impact?: number },
+  { address, top, impact }: SwingTimes,
   aspect = 1,
 ): CheckGuides {
   const start = address === undefined ? -1 : frameIndexNear(track, address);
 
   if (address === undefined || start < 0 || !hasPose(track, start)) {
-    return {};
+    return { aspect };
   }
 
-  const guides: CheckGuides = {};
+  const guides: CheckGuides = { aspect };
   const headEnd = impact ?? top ?? address;
   const source = headSource(track, address, headEnd);
   // About the head's half-height (~4.5 in against ~33 in of leg). Leg length is a steadier ruler
   // than the face, which tilts down at address.
   const radius = Math.max(0.01, legLength(track, start, aspect) * 0.13);
   guides.head = { source, origin: headAt(track, start, source), radius };
+
+  if (detectCameraView(track, start, aspect) === "down-the-line" && spineAngle(track, start, aspect) !== undefined) {
+    guides.posture = {
+      hips: midpoint(track, start, LM.leftHip, LM.rightHip),
+      shoulders: midpoint(track, start, LM.leftShoulder, LM.rightShoulder),
+    };
+  }
 
   return guides;
 }

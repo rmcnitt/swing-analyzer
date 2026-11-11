@@ -1,9 +1,10 @@
-import { hasPose, type PoseTrack } from "@/lib/pose/landmarks";
-import { headAt, type CheckGuides } from "@/lib/pose/swing-check";
+import { hasPose, LM, type PoseTrack } from "@/lib/pose/landmarks";
+import { headAt, midpoint, spineAngle, type CheckGuides, type Point2 } from "@/lib/pose/swing-check";
 import type { SwingCheckId } from "@/lib/types";
 
 export const CHECK_COLORS = {
   head: "#facc15",
+  posture: "#34d399",
 } as const;
 
 export type CheckVisibility = Partial<Record<SwingCheckId, boolean>>;
@@ -30,6 +31,10 @@ export function drawSwingChecks(
 
   if (visible.head && guides.head) {
     drawHead(context, track, index, guides.head, width, height, scale);
+  }
+
+  if (visible.posture && guides.posture) {
+    drawPosture(context, track, index, guides.posture, guides.aspect, width, height, scale);
   }
 
   context.restore();
@@ -87,4 +92,65 @@ function drawHead(
     context.arc(x, y, 2.5 * scale, 0, Math.PI * 2);
     context.fill();
   }
+}
+
+/** Point `t` of the way from `a` to `b` (beyond `b` when t > 1), in pixels. */
+function along(a: Point2, b: Point2, t: number, width: number, height: number): [number, number] {
+  return [(a.x + (b.x - a.x) * t) * width, (a.y + (b.y - a.y) * t) * height];
+}
+
+function label(context: CanvasRenderingContext2D, text: string, x: number, y: number, color: string, scale: number) {
+  context.font = `600 ${12 * scale}px ui-sans-serif, system-ui, sans-serif`;
+  context.textBaseline = "middle";
+  const padding = 3 * scale;
+  const textWidth = context.measureText(text).width;
+  context.shadowBlur = 0;
+  context.fillStyle = "rgba(0,0,0,0.7)";
+  context.fillRect(x - padding, y - 8 * scale, textWidth + padding * 2, 16 * scale);
+  context.fillStyle = color;
+  context.fillText(text, x, y);
+}
+
+/** Dashed line along the Address spine, solid line along the current spine with its angle. */
+function drawPosture(
+  context: CanvasRenderingContext2D,
+  track: PoseTrack,
+  index: number,
+  { hips, shoulders }: NonNullable<CheckGuides["posture"]>,
+  aspect: number,
+  width: number,
+  height: number,
+  scale: number,
+) {
+  context.save();
+  context.strokeStyle = CHECK_COLORS.posture;
+  context.lineWidth = 2 * scale;
+  context.setLineDash([7 * scale, 5 * scale]);
+  context.beginPath();
+  context.moveTo(...along(hips, shoulders, -0.15, width, height));
+  context.lineTo(...along(hips, shoulders, 1.35, width, height));
+  context.stroke();
+  context.setLineDash([]);
+
+  const angle = spineAngle(track, index, aspect);
+
+  if (angle !== undefined) {
+    const nowHips = midpoint(track, index, LM.leftHip, LM.rightHip);
+    const nowShoulders = midpoint(track, index, LM.leftShoulder, LM.rightShoulder);
+    context.lineWidth = 3 * scale;
+    context.beginPath();
+    context.moveTo(...along(nowHips, nowShoulders, 0, width, height));
+    context.lineTo(...along(nowHips, nowShoulders, 1, width, height));
+    context.stroke();
+
+    // Label off the middle of the back (the side away from the lean), over the background.
+    const [hx, hy] = along(nowHips, nowShoulders, 0.5, width, height);
+    const leansRight = nowShoulders.x > nowHips.x;
+    const text = `${Math.round(angle)}°`;
+    context.font = `600 ${12 * scale}px ui-sans-serif, system-ui, sans-serif`;
+    const textWidth = context.measureText(text).width;
+    label(context, text, leansRight ? hx - 26 * scale - textWidth : hx + 26 * scale, hy, CHECK_COLORS.posture, scale);
+  }
+
+  context.restore();
 }
