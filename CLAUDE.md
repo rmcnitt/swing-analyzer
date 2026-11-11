@@ -10,7 +10,8 @@ draw on video, mark swing positions, compare two swings side by side. Personal t
   and `DesignIdeas/*.png` (V1 screenshots) are gitignored, local only.
 - **Compare = side-by-side panes matched by swing position** (Address/Top/Impact checkpoints). Never overlay/onion-skin.
 - Targets desktop + iPad (touch drawing); phone must work but can be simplified.
-- Design: dark studio workspace, orange accent, thin chrome, video-first — see `DesignIdeas/brief.md`.
+- Design: **read `DESIGN.md` before any UI work** (tokens, components, screens, banned patterns, verification).
+  Dark studio, one orange accent, thin chrome, video-first. Working features always outrank visuals.
 
 ## Stack & commands
 Next.js 16 App Router, React 19, TypeScript, Tailwind v4, react-konva (drawing), zod, Vitest.
