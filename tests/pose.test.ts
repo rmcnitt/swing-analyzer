@@ -74,6 +74,12 @@ describe("frameIndexNear", () => {
     expect(frameIndexNear(track, 0.36)).toBe(3);
   });
 
+  it("takes the later frame at a frame boundary, despite float error", () => {
+    expect(frameIndexNear(track, 0.2)).toBe(2);
+    expect(frameIndexNear(track, 0.199999)).toBe(2);
+    expect(frameIndexNear(track, 0.2000001)).toBe(2);
+  });
+
   it("returns -1 beyond the tolerance", () => {
     expect(frameIndexNear(track, 0.6)).toBe(-1);
     expect(frameIndexNear(track, 0.16, 0.001)).toBe(-1);

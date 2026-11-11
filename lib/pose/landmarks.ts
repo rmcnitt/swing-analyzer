@@ -136,7 +136,9 @@ export function frameIndexNear(track: PoseTrack, time: number, tolerance?: numbe
     }
   }
 
-  const index = low > 0 && time - times[low - 1] < times[low] - time ? low - 1 : low;
+  // Halfway between two analyzed frames (a frame boundary, where the video shows the later frame),
+  // pick the later one, and don't let float error (2.05 vs 2.049999) flip the choice.
+  const index = low > 0 && time - times[low - 1] < times[low] - time - 1e-4 ? low - 1 : low;
   const spacing = times.length > 1 ? (times[times.length - 1] - times[0]) / (times.length - 1) : Infinity;
   const limit = tolerance ?? spacing * 1.5;
 
