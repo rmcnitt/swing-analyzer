@@ -74,14 +74,29 @@ session fields are optional, so main keeps reading the same browser data either 
    re-detects. Sync turns on when both swings share ≥2 positions. Tracks are cleaned first (side-swap fix +
    smoothing, `clean-track.ts`). Tested on recorded sample tracks (`tests/fixtures/pose/`) vs hand-labelled
    frames. ← **checkpoint: review on real clips.**
-5. [x] **Swing check** (replaces joint angles, 2026-11-10): the skeleton alone gave golfers nothing to act on, and
-   shoulder/hip angles aren't reliable. A per-pane strip (Gauge button) built on what pose tracks well:
-   - **Tempo** backswing : downswing (takeaway start → Top → Impact; tour ≈ 3:1).
-   - **Head movement** at Top and Impact vs Address, in approximate inches (scaled by leg length), with golf
-     directions from the pose (camera view from shoulder width; target/ball side from the hands).
-   - **Traces**: hand path (backswing orange, downswing blue) and head path with an address ring; in PNG export.
-   Logic in `lib/pose/swing-check.ts` + `draw-traces.ts`, tested on the sample tracks (face-on tempo 3.0:1; its
-   4.6 in head dip matches the frames). ← **checkpoint: user review.**
+5. [x] **Swing checks** (replaces joint angles, 2026-11-10; v2 after review the same day): the skeleton alone gave
+   golfers nothing to act on. A per-pane panel (Gauge button) as a table, with Address / Top / Impact columns that
+   double as jump buttons. Each check has its own switch (off = no numbers, nothing drawn). The panel snaps to any
+   corner when dragged and remembers it per pane.
+   - **Tempo:** backswing : downswing (takeaway start → Top → Impact; tour ≈ 3:1).
+   - **Head:**
+     - Movement at Top and Impact vs Address, in inches.
+     - Overlay: a dashed ring at Address plus a live ring on the head.
+     - Turning it on jumps to Address.
+   - **Golfer height:** inches are scaled from the golfer's height via leg length.
+     - Your height is a preference, used for your swings.
+     - Reference clips store their own height (`VideoAsset.golferHeightInches`).
+   - **Down-the-line only** (face-on clips fold these into one note):
+     - **Posture:** spine angle (hip middle → shoulder middle, above the ground) at Address / Top / Impact. Flagged
+       beyond 5° of change.
+     - **Early extension:** the hips' move toward the ball, in inches, at Top and Impact. Overlay: a dashed "wall"
+       at the Address butt and a live butt dot. Flagged beyond 1.5 in toward the ball; behind the line is fine.
+     - **Lead arm:** lead arm vs the line through the shoulders at Top, degrees above or below. Flagged beyond 10°.
+   - Tolerances are kept together in `CHECK_TOLERANCES`.
+   - The hand path trace was tried and removed (cluttered, not useful).
+   - Logic lives in `lib/pose/swing-check.ts` and `draw-checks.ts`.
+   - Tested on the sample tracks and checked against frames (DTL spine ~56→58→54°, hips on the line, lead arm a few
+     degrees above). ← **checkpoint: user review on own clips.**
 6. [ ] _(optional, later)_ Joint angles / angle-over-time chart, only for angles that prove reliable.
 
 Notes: analysis takes ~10–17 s per 5 s clip on the user's machine. Takeaway and Transition aren't detected.

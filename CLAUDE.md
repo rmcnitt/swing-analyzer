@@ -28,7 +28,8 @@ Next.js 16 App Router, React 19, TypeScript, Tailwind v4, react-konva (drawing),
 - `lib/pose/` pose estimation: `pose-engine.ts` (MediaPipe, lazy), `pose-cache.ts` (own IndexedDB db),
   `pose-store.ts` (per-clip status/tracks), `landmarks.ts` (packed track format), `clean-track.ts`,
   `swing-positions.ts` (Address/Top/Impact/Finish from the hand path), `golfer-box.ts`, `auto-positions.ts`,
-  `swing-check.ts` + `draw-traces.ts` (tempo, head movement, traces); UI in `pose-overlay.tsx`, `swing-check.tsx`.
+  `swing-check.ts` (tempo, head, posture, early extension, lead arm; `CHECK_TOLERANCES`; golfer-height ruler) +
+  `draw-checks.ts` (overlays, shared with PNG export); UI in `pose-overlay.tsx`, `swing-check.tsx` (checks panel).
   Detection is tested on recorded sample tracks in `tests/fixtures/pose/`.
 - Annotation geometry is stored **normalized 0–1** relative to the video frame; convert with `lib/analysis/annotations.ts`.
 
