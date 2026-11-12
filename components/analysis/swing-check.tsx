@@ -303,7 +303,8 @@ export function SwingChecksPanel({
         docked === "side"
           ? "w-72 shrink-0 self-start overflow-y-auto border-b border-l border-border max-h-full"
           : docked === "below"
-            ? "max-h-[45%] shrink-0 overflow-y-auto border-t border-border"
+            ? // Phone: the panel sits after the controls in a scrolling page, so it shows in full.
+            "max-h-[45%] shrink-0 overflow-y-auto border-t border-border max-md:max-h-none"
             : cn(
               "absolute z-10 w-[min(18rem,calc(100%-1rem))] overflow-hidden rounded-panel border border-border shadow-float",
               CORNER_CLASSES[corner],

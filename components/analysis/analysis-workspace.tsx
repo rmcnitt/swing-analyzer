@@ -46,6 +46,7 @@ import type {
   VideoAsset,
 } from "@/lib/types";
 import { createId, formatTimecode, uniqueById } from "@/lib/utils";
+import { usePhoneLayout } from "@/lib/use-phone-layout";
 import { composeCaptures, downloadCanvas, exportFileName, type FrameCapture } from "@/lib/video/frame-export";
 import { DEFAULT_FPS, frameIndexAt } from "@/lib/analysis/frames";
 import { DEFAULT_STROKE_WIDTH, STROKE_WIDTHS } from "@/lib/analysis/annotations";
@@ -214,6 +215,9 @@ function WorkspaceView({
   const [activeTool, setActiveTool] = useState<AnnotationTool>(
     () => (loadUiPreference("active-tool") as AnnotationTool | null) ?? "line",
   );
+  // Phone (DESIGN.md): playback, positions and checks only. No drawing tools, so a touch on the
+  // video never draws; existing drawings still show.
+  const isPhone = usePhoneLayout();
   const [activeColor, setActiveColor] = useState<HexColor>(
     () => loadUiPreference("active-color") ?? DEFAULT_ANNOTATION_COLOR,
   );
@@ -959,7 +963,7 @@ function WorkspaceView({
       ) : null}
 
       <div className="flex min-h-0 flex-1">
-        <div className="w-[52px] shrink-0 pointer-coarse:w-[60px]">
+        <div className="w-[52px] shrink-0 pointer-coarse:w-[60px] max-md:hidden">
           <AnalysisToolbar
             activeTool={activeTool}
             activeColor={activeColor}
@@ -985,7 +989,7 @@ function WorkspaceView({
           />
         </div>
 
-        <main className="flex min-w-0 flex-1 flex-col p-1.5">
+        <main className="flex min-w-0 flex-1 flex-col p-1.5 max-md:overflow-y-auto">
           {compareMode ? (
             <ComparePositionBar
               syncEnabled={session.syncEnabled}
@@ -1001,6 +1005,9 @@ function WorkspaceView({
           ) : null}
           <div
             className={`grid min-h-0 flex-1 ${
+              // Phone: panes stack at their natural height and the page scrolls.
+              "max-md:flex max-md:flex-none max-md:flex-col"
+            } ${
               // Side by side in landscape (desktop, iPad landscape), stacked in portrait.
               compareMode
                 ? "grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-1 landscape:grid-cols-2 landscape:grid-rows-1 md:grid-cols-2 md:grid-rows-1"
@@ -1019,7 +1026,8 @@ function WorkspaceView({
                 detectedPositions={detectedPositionKeys(markersByPane[pane.id])}
                 canAutoDetect={Boolean(pane.videoId && detectPositions(pane.videoId))}
                 onAutoPositions={() => handleAutoPositions(pane.id)}
-                activeTool={activeTool}
+                activeTool={isPhone ? "zoom-pan" : activeTool}
+                phoneLayout={isPhone}
                 activeColor={activeColor}
                 strokeWidth={strokeWidth}
                 selectedAnnotationId={selectedAnnotationByPane[pane.id] ?? null}

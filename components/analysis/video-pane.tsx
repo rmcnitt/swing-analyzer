@@ -100,6 +100,8 @@ interface VideoPaneProps {
   canAutoDetect: boolean;
   onAutoPositions: () => void;
   activeTool: AnnotationTool;
+  /** Phone layout: natural height in a scrolling page, chips and timeline above the buttons. */
+  phoneLayout?: boolean;
   activeColor: HexColor;
   strokeWidth: number;
   selectedAnnotationId?: string | null;
@@ -163,6 +165,7 @@ export function VideoPane({
   canAutoDetect,
   onAutoPositions,
   activeTool,
+  phoneLayout = false,
   activeColor,
   strokeWidth,
   selectedAnnotationId,
@@ -773,14 +776,14 @@ export function VideoPane({
     <section
       className={cn(
         // @container: controls adapt to the pane's own width (half the screen when comparing).
-        "@container flex min-h-0 flex-col border transition",
+        "@container flex min-h-0 flex-col border transition max-md:flex-none",
         // The orange square in the header marks the active pane; the border stays quiet.
         isActive ? "border-border-strong bg-surface-1" : "border-border bg-surface-1",
       )}
       onClick={() => onActivate(pane.id)}
     >
       <div className="flex min-h-10 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-border bg-surface-1 px-2.5 py-1">
-        <div className="min-w-0 flex-1 basis-40">
+        <div className="min-w-0 flex-1 basis-40 max-md:flex-none max-md:basis-auto">
           <div className="flex items-center gap-2">
             <span
               className={cn(
@@ -808,7 +811,7 @@ export function VideoPane({
                 aria-label="Rename video"
               />
             ) : (
-              <p className="truncate text-xs font-medium text-text">
+              <p className="truncate text-xs font-medium text-text max-md:hidden">
                 {getVideoLabel(video?.title)}
               </p>
             )}
@@ -824,7 +827,7 @@ export function VideoPane({
                   setDraftTitle(video?.title ?? "");
                   setIsRenaming(true);
                 }}
-                className="flex size-6 items-center justify-center text-text-muted hover:bg-surface-2 hover:text-text"
+                className="flex size-6 items-center justify-center text-text-muted hover:bg-surface-2 hover:text-text max-md:hidden"
                 title={isRenaming ? "Save name" : "Rename video"}
                 aria-label={isRenaming ? "Save video name" : "Rename video"}
               >
@@ -832,7 +835,7 @@ export function VideoPane({
               </button>
             ) : null}
             {compareMode && isComparisonPane ? (
-              <span className="border border-border px-1.5 py-0.5 text-xs uppercase tracking-caps text-text-muted">
+              <span className="border border-border px-1.5 py-0.5 text-xs uppercase tracking-caps text-text-muted max-md:hidden">
                 Compare
               </span>
             ) : null}
@@ -846,7 +849,7 @@ export function VideoPane({
           </p>
         </div>
 
-        <div className="flex min-w-fit items-center gap-2">
+        <div className="flex min-w-fit items-center gap-2 max-md:min-w-0 max-md:flex-1">
           <div className="hidden items-center gap-0.5 rounded-control border border-border bg-bg/25 p-0.5 @sm:flex">
             <button
               type="button"
@@ -913,7 +916,7 @@ export function VideoPane({
           </div>
 
           <label
-            className="cursor-pointer border border-border px-2 py-1.5 text-xs text-text hover:border-accent"
+            className="flex shrink-0 cursor-pointer items-center border border-border px-2 py-1.5 text-xs text-text hover:border-accent pointer-coarse:h-10"
             title="Upload a clip into this pane"
           >
             <span className="inline-flex items-center gap-2">
@@ -937,7 +940,7 @@ export function VideoPane({
           <select
             value={pane.videoId ?? ""}
             onChange={(event) => onSelectVideo(pane.id, event.target.value)}
-            className="max-w-36 border border-border bg-bg px-2 py-1.5 text-xs text-text @lg:max-w-52"
+            className="max-w-36 border border-border bg-bg px-2 py-1.5 text-xs text-text @lg:max-w-52 pointer-coarse:h-10 max-md:min-w-0 max-md:max-w-none max-md:flex-1"
             aria-label="Clip in this pane"
           >
             <option value="">Choose saved swing</option>
@@ -965,14 +968,18 @@ export function VideoPane({
         <div
           ref={mediaAreaRef}
           className={cn(
-            "flex min-h-0 flex-1 overflow-hidden",
+            "flex min-h-0 flex-1 overflow-hidden max-md:flex-none",
             swingCheckOn && checksPlacement === "side" ? "flex-row" : "flex-col",
           )}
         >
           <div
             ref={mediaViewportRef}
             className={cn(
-              "relative min-h-[120px] w-full flex-1 touch-none overflow-hidden bg-bg",
+              "relative min-h-[120px] w-full flex-1 overflow-hidden bg-bg",
+              // Phone: a fixed share of the screen (both swings fit when stacked), and a swipe
+              // over the video scrolls the page unless it's zoomed in for panning.
+              compareMode ? "max-md:h-[30dvh] max-md:flex-none" : "max-md:h-[56dvh] max-md:flex-none",
+              phoneLayout && !canPan ? "touch-pan-y" : "touch-none",
               canPan ? "cursor-grab active:cursor-grabbing" : null,
             )}
             onWheel={handleWheel}
@@ -1147,11 +1154,11 @@ export function VideoPane({
             )}
           </div>
 
-          {swingCheckOn && checksDocked ? checksPanel : null}
+          {swingCheckOn && checksDocked && !phoneLayout ? checksPanel : null}
         </div>
 
-        <div className="shrink-0 border-t border-border bg-surface-1 px-2.5 py-1.5">
-          <div className="flex flex-wrap items-center gap-2 @md:flex-nowrap">
+        <div className="flex shrink-0 flex-col border-t border-border bg-surface-1 px-2.5 py-1.5">
+          <div className="flex flex-wrap items-center gap-2 @md:flex-nowrap max-md:justify-between max-md:gap-1.5">
             <button
               type="button"
               onClick={togglePlayback}
@@ -1271,8 +1278,10 @@ export function VideoPane({
             </select>
           </div>
 
-          {video && !playbackProblem ? (
+          {/* Phone compare: the shared "Both to" row above the panes does the jumping. */}
+          {video && !playbackProblem && !(phoneLayout && compareMode) ? (
             <PositionBar
+              className="max-md:order-first max-md:mt-0 max-md:mb-1.5"
               timeStore={timeStore}
               fps={video.fps}
               positions={positions}
@@ -1292,6 +1301,9 @@ export function VideoPane({
             />
           ) : null}
         </div>
+
+        {/* Phone: the page scrolls, so the panel goes after the controls instead of squeezing the video. */}
+        {swingCheckOn && checksDocked && phoneLayout ? checksPanel : null}
       </div>
     </section>
   );
@@ -1319,7 +1331,7 @@ function PlaybackTransport({
   return (
     <>
       {/* In a narrow pane the scrubber gets its own row so it stays usable. */}
-      <div className="order-last min-w-0 basis-full px-1 @md:order-none @md:flex-1 @md:basis-0 @md:px-2">
+      <div className="order-last min-w-0 basis-full px-1 @md:order-none @md:flex-1 @md:basis-0 @md:px-2 max-md:order-first max-md:mb-1">
         <Timeline
           currentTime={currentTime}
           duration={duration}

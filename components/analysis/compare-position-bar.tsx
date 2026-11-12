@@ -47,15 +47,16 @@ export function ComparePositionBar({
   const matchedKeys = new Set(checkpoints.map((checkpoint) => checkpoint.key));
 
   return (
-    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded-panel border border-border bg-surface-1 px-2 py-1.5">
-      <div className="flex min-w-0 items-center gap-2">
+    // Phone: one row (sync, then the chips scrolling sideways, then Fit both); the summary is in the sync tooltip.
+    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded-panel border border-border bg-surface-1 px-2 py-1.5 max-md:flex-nowrap max-md:gap-x-2">
+      <div className="flex min-w-0 shrink-0 items-center gap-2">
         <button
           type="button"
           onClick={onToggleSync}
           aria-pressed={syncEnabled}
-          title={syncEnabled ? "Turn sync off" : "Turn sync on"}
+          title={`${syncEnabled ? "Turn sync off" : "Turn sync on"}. ${syncSummary(syncEnabled, checkpoints)}`}
           className={cn(
-            "flex size-7 shrink-0 items-center justify-center border",
+            "flex size-7 shrink-0 items-center justify-center border pointer-coarse:size-9",
             syncEnabled
               ? "border-accent bg-accent-dim text-text"
               : "border-border text-text-muted hover:text-text",
@@ -63,13 +64,13 @@ export function ComparePositionBar({
         >
           {syncEnabled ? <Link2 className="size-3.5" /> : <Link2Off className="size-3.5" />}
         </button>
-        <p className="truncate text-xs text-text-muted">
+        <p className="truncate text-xs text-text-muted max-md:hidden">
           {syncSummary(syncEnabled, checkpoints)}
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <div className="flex items-center gap-1 overflow-x-auto" role="group" aria-label="Jump both panes to a position">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 max-md:min-w-0 max-md:flex-1 max-md:flex-nowrap max-md:gap-x-2">
+        <div className="flex items-center gap-1 overflow-x-auto max-md:min-w-0 max-md:flex-1" role="group" aria-label="Jump both panes to a position">
           <span className="mr-1 hidden text-xs uppercase tracking-caps text-text-muted md:inline">
             Both to
           </span>
@@ -116,10 +117,11 @@ export function ComparePositionBar({
               ? "Zoom both panes so the golfers appear the same size"
               : "Use Fit in each pane's header to box the golfer first"
           }
-          className="flex h-7 shrink-0 items-center gap-1 border border-border-strong px-2 text-xs text-text hover:border-accent disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Fit both"
+          className="flex h-7 shrink-0 items-center gap-1 border border-border-strong px-2 text-xs text-text hover:border-accent disabled:cursor-not-allowed disabled:opacity-40 pointer-coarse:h-9"
         >
           <ScanSearch className="size-3.5" />
-          Fit both
+          <span className="max-md:hidden">Fit both</span>
         </button>
       </div>
     </div>

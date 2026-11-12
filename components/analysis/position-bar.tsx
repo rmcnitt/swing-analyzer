@@ -31,6 +31,7 @@ interface PositionBarProps {
   onMoveCustom: (markerId: string) => void;
   onRenameCustom: (markerId: string, label: string) => void;
   onDeleteCustom: (markerId: string) => void;
+  className?: string;
 }
 
 /** Position chips (DESIGN.md): 28px, mono; unmarked faint outline, marked text, current accent. */
@@ -66,6 +67,7 @@ export function PositionBar({
   onMoveCustom,
   onRenameCustom,
   onDeleteCustom,
+  className,
 }: PositionBarProps) {
   const currentTime = useSyncExternalStore(timeStore.subscribe, timeStore.get, () => 0);
   const [editing, setEditing] = useState(false);
@@ -74,7 +76,7 @@ export function PositionBar({
   const isHere = (time: number) => frameIndexAt(time, fps) === currentFrame;
 
   return (
-    <div className="mt-1.5 flex items-center gap-1 overflow-x-auto" role="group" aria-label="Swing positions">
+    <div className={cn("mt-1.5 flex items-center gap-1 overflow-x-auto", className)} role="group" aria-label="Swing positions">
       <button
         type="button"
         onClick={() => setEditing((current) => !current)}

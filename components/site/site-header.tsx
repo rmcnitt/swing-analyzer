@@ -35,7 +35,7 @@ export function SiteHeader({ currentPath }: SiteHeaderProps) {
           </div>
         </Link>
 
-        <nav className="hidden items-center gap-1.5 md:flex">
+        <nav className="flex items-center gap-1.5">
           {links.map((link) => {
             const Icon = link.icon;
             const isActive = currentPath === link.href;
@@ -45,7 +45,7 @@ export function SiteHeader({ currentPath }: SiteHeaderProps) {
                 key={link.href}
                 href={link.href}
                 className={cn(
-                  "inline-flex h-8 items-center gap-2 border px-2.5 text-xs transition",
+                  "inline-flex h-8 items-center gap-2 border px-2.5 text-xs transition pointer-coarse:h-10 pointer-coarse:px-3",
                   isActive
                     ? "border-accent bg-accent-dim text-text"
                     : "border-border bg-surface-2 text-text-muted hover:border-border-strong hover:text-text",
