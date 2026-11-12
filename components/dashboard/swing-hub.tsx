@@ -215,7 +215,7 @@ export function SwingHub() {
 
   return (
     <main>
-      <section className="mx-auto grid w-full max-w-6xl gap-8 px-4 pb-12 pt-8 md:pt-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:items-center lg:gap-12 lg:px-6 lg:pb-20">
+      <section className="mx-auto grid w-full max-w-6xl gap-8 px-4 pb-12 pt-8 md:pt-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] lg:items-center lg:gap-12 lg:px-6 lg:pb-20">
         <div className="max-w-xl">
           <h1 className="text-4xl font-semibold tracking-tight text-text md:text-6xl md:tracking-[-0.02em]">
             Your swing, frame by frame.
@@ -227,7 +227,7 @@ export function SwingHub() {
 
           <div className="mt-8 flex flex-col gap-2 sm:flex-row">
             <Link
-              href="/analysis/sample-session"
+              href="/analysis/sample-session-dtl"
               className="inline-flex h-11 items-center justify-center gap-2 rounded-control bg-accent px-4 text-sm font-semibold text-bg"
             >
               <Play className="size-4" />
@@ -281,7 +281,7 @@ export function SwingHub() {
           ) : null}
         </div>
 
-        <HeroSwing className="h-[min(78vh,640px)] min-h-[440px]" />
+        <HeroSwing className="h-[min(80vh,660px)] min-h-[480px] w-full max-w-[440px] justify-self-center lg:justify-self-end" />
       </section>
 
       <div ref={importRef} className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 empty:hidden lg:px-6">

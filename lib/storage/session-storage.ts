@@ -17,7 +17,9 @@ const videoStoreName = "videos";
 const videoBlobStoreName = "video-blobs";
 const thumbnailBlobStoreName = "thumbnail-blobs";
 const metaStoreName = "meta";
-const seededKey = "seeded-samples-v1";
+/** Bump when the bundled samples change: browsers that already have them get the new versions. */
+const seededKey = "seeded-samples-v2";
+const earlierSeededKeys = ["seeded-samples-v1"];
 const preferencePrefix = "swing-analyzer-ui";
 
 type StoreName =
@@ -142,13 +144,18 @@ export function ensureLocalLibrarySeeded() {
   }
 
   seedPromise ??= (async () => {
-    const seeded = await runStore<string>(metaStoreName, "readonly", (store) =>
-      store.get(seededKey),
+    const [seeded, ...earlier] = await Promise.all(
+      [seededKey, ...earlierSeededKeys].map((key) =>
+        runStore<string>(metaStoreName, "readonly", (store) => store.get(key)),
+      ),
     );
 
     if (seeded) {
       return;
     }
+
+    // Seeded before: refresh the sample sessions still there, and don't bring back deleted ones.
+    const seededBefore = earlier.some(Boolean);
 
     const [sessionKeys, videoKeys] = await Promise.all([
       runStore<IDBValidKey[]>(sessionStoreName, "readonly", (store) => store.getAllKeys()),
@@ -159,10 +166,10 @@ export function ensureLocalLibrarySeeded() {
 
     await Promise.all([
       ...sampleVideos
-        .filter((video) => !existingVideos.has(video.id))
+        .filter((video) => !seededBefore && !existingVideos.has(video.id))
         .map((video) => saveStoredVideo(video)),
       ...sampleSessions
-        .filter((session) => !existingSessions.has(session.id))
+        .filter((session) => (seededBefore ? existingSessions.has(session.id) : !existingSessions.has(session.id)))
         .map((session) => saveStoredSession(session)),
     ]);
     await putRecord(metaStoreName, "true", seededKey);

@@ -55,7 +55,10 @@ function positionMarkers(
   }));
 }
 
-function samplePanes(videoId: string): AnalysisSession["panes"] {
+function samplePanes(
+  videoId: string,
+  primary: Partial<AnalysisSession["panes"][number]> = {},
+): AnalysisSession["panes"] {
   return [
     {
       id: "primary",
@@ -64,6 +67,7 @@ function samplePanes(videoId: string): AnalysisSession["panes"] {
       overlayVisible: true,
       playbackRate: 0.25,
       currentTime: 0,
+      ...primary,
     },
     {
       id: "secondary",
@@ -85,7 +89,7 @@ export const sampleSessions: AnalysisSession[] = [
     playbackDefaults: { speed: 0.25 },
     notes:
       "Sample session. Click a marker to jump to that position, step frame by frame, and try the drawing tools. The circle tracks head position at address.",
-    lastOpenedAt: seededAt,
+    lastOpenedAt: "2026-11-02T11:00:00.000Z",
     panes: samplePanes("sample-video-face-on"),
     annotations: {
       primary: [
@@ -115,9 +119,17 @@ export const sampleSessions: AnalysisSession[] = [
     primaryVideoId: "sample-video-down-the-line",
     syncEnabled: false,
     playbackDefaults: { speed: 0.25 },
-    notes: "Sample session. Try the angle tool on the spine at address, then step to Top and compare.",
-    lastOpenedAt: "2026-11-02T11:00:00.000Z",
-    panes: samplePanes("sample-video-down-the-line"),
+    notes:
+      "Sample session. The pose skeleton and every swing check are already on. Press 1-4 to jump between Address, Top, Impact and Finish, or Set to move a marker.",
+    // What "Try the sample swing" opens: newest, so it lists first. It opens analyzed (the
+    // clip's bundled pose recording) and framed, with every check showing.
+    lastOpenedAt: seededAt,
+    panes: samplePanes("sample-video-down-the-line", {
+      poseVisible: true,
+      swingCheck: true,
+      fitGolfer: true,
+      checks: { tempo: true, head: true, posture: true, extension: true, leadArm: true },
+    }),
     annotations: { primary: [], secondary: [] },
     snapshotMarkers: positionMarkers("sample-session-dtl", "primary", "sample-video-down-the-line", {
       Address: 1.0,

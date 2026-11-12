@@ -45,3 +45,28 @@ export function poseTrackFromRecording(recording: PoseRecording): PoseTrack {
     analyzedAt: "2026-11-03T00:00:00.000Z",
   };
 }
+
+/** The bundled sample clips' recordings, served from public/samples/. */
+const SAMPLE_RECORDINGS: Record<string, string> = {
+  "sample-video-face-on": "/samples/sample-face-on.pose.json",
+  "sample-video-down-the-line": "/samples/sample-down-the-line.pose.json",
+};
+
+/**
+ * A sample clip's recorded track, so the samples open with the skeleton and checks already there
+ * (no model download, no analysis). Null for any other clip, or if the file can't be read.
+ */
+export async function loadSampleRecording(videoId: string): Promise<PoseTrack | null> {
+  const url = SAMPLE_RECORDINGS[videoId];
+
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(url);
+    return response.ok ? poseTrackFromRecording((await response.json()) as PoseRecording) : null;
+  } catch {
+    return null;
+  }
+}

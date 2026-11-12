@@ -21,8 +21,11 @@ Next.js 16 App Router, React 19, TypeScript, Tailwind v4, react-konva (drawing),
 ## Code map
 - `app/` thin route files; `/` landing (`components/dashboard/swing-hub.tsx`: hero, upload/import setup, screenshots in
   `public/landing/`), `/library` (thumbnail grid), `/analysis/[sessionId]` (`?compare=true` for two panes).
-- `components/landing/hero-swing.tsx`: the sample clip looping with real pose/check overlays, from the recorded track
-  `public/samples/sample-face-on.pose.json` (a copy of the face-on test fixture; `lib/pose/pose-recording.ts` loads both).
+- `components/landing/hero-swing.tsx`: the down-the-line sample looping as a short demo (a cursor turns on Pose, then
+  the posture check; timeline in `lib/landing/hero-script.ts`), framed with `coverFraming`. Overlays come from the
+  recorded tracks `public/samples/*.pose.json` (copies of the test fixtures, loaded by `lib/pose/pose-recording.ts`);
+  the sample sessions use the same recordings so they open already analyzed. "Try the sample swing" opens
+  `sample-session-dtl`. Bump `seededKey` in `session-storage.ts` when the bundled samples change.
 - `components/analysis/` workspace: `analysis-workspace.tsx` (session state), `video-pane.tsx` (playback, sync,
   zoom), `annotation-canvas.tsx` (Konva shapes), `analysis-toolbar.tsx`, `notes-popover.tsx`, `timeline.tsx`.
   `position-bar.tsx` (marker row: positions + custom markers, edit mode) / `compare-position-bar.tsx` (jump both), `golfer-box-editor.tsx` (fit framing).

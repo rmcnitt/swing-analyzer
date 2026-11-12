@@ -51,6 +51,33 @@ export function fitFraming(box: NormalizedRect, stage: Size, viewport: Size, fil
   };
 }
 
+/**
+ * Zoom and pan that fill the whole viewport with video (no empty margins) while showing no more
+ * than `crop`'s width of the frame, centred on `crop` as far as the frame edges allow. For a fixed
+ * showcase framing (the landing hero); `crop`'s height only sets the vertical centre.
+ */
+export function coverFraming(crop: NormalizedRect, stage: Size, viewport: Size): Framing {
+  if (crop.width <= 0 || stage.width <= 0 || stage.height <= 0 || viewport.width <= 0 || viewport.height <= 0) {
+    return { zoom: 1, pan: { x: 0, y: 0 } };
+  }
+
+  const zoom = Math.max(
+    viewport.width / stage.width,
+    viewport.height / stage.height,
+    viewport.width / (crop.width * stage.width),
+  );
+  const offsetX = (crop.x + crop.width / 2 - 0.5) * stage.width;
+  const offsetY = (crop.y + crop.height / 2 - 0.5) * stage.height;
+  // The stage is centred in the viewport and scaled about its centre: keep it covering the viewport.
+  const maxX = Math.max(0, (stage.width * zoom - viewport.width) / 2);
+  const maxY = Math.max(0, (stage.height * zoom - viewport.height) / 2);
+
+  return {
+    zoom: Number(zoom.toFixed(3)),
+    pan: { x: clamp(-offsetX * zoom, -maxX, maxX), y: clamp(-offsetY * zoom, -maxY, maxY) },
+  };
+}
+
 /** The rectangle spanned by two normalized points, clipped to the frame. */
 export function rectFromPoints(a: Point, b: Point): NormalizedRect {
   const x0 = clamp(Math.min(a.x, b.x), 0, 1);

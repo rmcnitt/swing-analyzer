@@ -74,6 +74,7 @@ import { isTypingTarget, resolveShortcut, type ShortcutAction } from "@/lib/anal
 import { createCheckpointMapper, matchCheckpoints } from "@/lib/analysis/sync";
 import { SyncGroup } from "@/lib/analysis/sync-group";
 import { loadPoseTrack, savePoseTrack } from "@/lib/pose/pose-cache";
+import { loadSampleRecording } from "@/lib/pose/pose-recording";
 import { analyzeVideo } from "@/lib/pose/pose-engine";
 import { createPoseStore } from "@/lib/pose/pose-store";
 import {
@@ -252,7 +253,8 @@ function WorkspaceView({
   const [syncGroup] = useState(() => new SyncGroup());
   const [poseStore] = useState(() =>
     createPoseStore({
-      load: loadPoseTrack,
+      // The sample clips fall back to their bundled recordings, so they open already analyzed.
+      load: async (videoId) => (await loadPoseTrack(videoId)) ?? loadSampleRecording(videoId),
       save: savePoseTrack,
       analyze: analyzeVideo,
       prepare: cleanTrack,

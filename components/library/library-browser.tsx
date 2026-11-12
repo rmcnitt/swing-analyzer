@@ -32,7 +32,7 @@ export function LibraryBrowser() {
   );
   const sessions = [...library.sessions].sort(byLastOpened);
   // "Add to compare" opens the most recently used session with the reference in the second pane.
-  const compareSessionId = sessions[0]?.id ?? "sample-session";
+  const compareSessionId = sessions[0]?.id ?? "sample-session-dtl";
   const refreshStorage = () => setStorageVersion((current) => current + 1);
 
   const needle = query.trim().toLowerCase();
