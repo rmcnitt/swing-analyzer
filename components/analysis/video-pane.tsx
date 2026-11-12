@@ -43,6 +43,7 @@ import { classifyMediaError, type PlaybackProblem } from "@/lib/video/playback-e
 import { createTimeStore, type TimeStore } from "@/lib/video/time-store";
 import { PlaybackProblemNotice } from "@/components/analysis/playback-problem-notice";
 import { getContainedStageSize, getVideoAspectRatio } from "@/lib/video-layout";
+import { checksPanelPlacement } from "@/lib/analysis/checks-placement";
 import { clampPan, fitFraming, MAX_ZOOM, MIN_ZOOM } from "@/lib/analysis/framing";
 import { defaultLoop } from "@/lib/analysis/loop";
 import { GolferBoxEditor } from "@/components/analysis/golfer-box-editor";
@@ -180,6 +181,7 @@ export function VideoPane({
 }: VideoPaneProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaViewportRef = useRef<HTMLDivElement | null>(null);
+  const mediaAreaRef = useRef<HTMLDivElement | null>(null);
   const panStartRef = useRef<{
     pointerX: number;
     pointerY: number;
@@ -387,6 +389,7 @@ export function VideoPane({
   const [boxMode, setBoxMode] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [draftTitle, setDraftTitle] = useState(video?.title ?? "");
+  const [mediaAreaSize, setMediaAreaSize] = useState({ width: 0, height: 0 });
   const [viewportSize, setViewportSize] = useState({
     width: 0,
     height: 0,
@@ -411,6 +414,21 @@ export function VideoPane({
     const observer = new ResizeObserver(updateSize);
     observer.observe(node);
 
+    return () => observer.disconnect();
+  }, []);
+
+  // The media area (video plus a docked checks panel) keeps its size when the panel docks.
+  useEffect(() => {
+    const node = mediaAreaRef.current;
+
+    if (!node) {
+      return;
+    }
+
+    const update = () => setMediaAreaSize({ width: node.clientWidth, height: node.clientHeight });
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
     return () => observer.disconnect();
   }, []);
 
@@ -711,6 +729,29 @@ export function VideoPane({
     }
   };
 
+  // Where the panel would cover the golfer, it sits below the video instead of over it.
+  const checksDocked =
+    checksPanelPlacement(mediaAreaSize.width, mediaAreaSize.height, stageAspectRatio) === "dock";
+  const checksPanel = (
+    <SwingChecksPanel
+      docked={checksDocked}
+      pose={poseState}
+      data={swingCheck?.data ?? null}
+      checks={pane.checks}
+      positions={positions}
+      timeStore={timeStore}
+      frameTolerance={frameDuration(video?.fps) / 2}
+      height={golferHeight}
+      corner={pane.checksCorner ?? "top-left"}
+      onMoveCorner={(corner) => onUpdatePane(pane.id, { checksCorner: corner })}
+      onToggleCheck={toggleCheck}
+      onJump={(label) => onJumpToPosition(pane.id, label)}
+      onSetHeight={(inches) => video && onSetGolferHeight(video.id, inches)}
+      onAnalyze={analyzePose}
+      onClose={toggleSwingCheck}
+    />
+  );
+
   return (
     <section
       className={cn(
@@ -904,7 +945,7 @@ export function VideoPane({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-bg">
+      <div ref={mediaAreaRef} className="flex min-h-0 flex-1 flex-col overflow-hidden bg-bg">
         <div
           ref={mediaViewportRef}
           className={cn(
@@ -1039,24 +1080,7 @@ export function VideoPane({
                 ) : null}
               </div>
 
-              {swingCheckOn ? (
-                <SwingChecksPanel
-                  pose={poseState}
-                  data={swingCheck?.data ?? null}
-                  checks={pane.checks}
-                  positions={positions}
-                  timeStore={timeStore}
-                  frameTolerance={frameDuration(video.fps) / 2}
-                  height={golferHeight}
-                  corner={pane.checksCorner ?? "top-left"}
-                  onMoveCorner={(corner) => onUpdatePane(pane.id, { checksCorner: corner })}
-                  onToggleCheck={toggleCheck}
-                  onJump={(label) => onJumpToPosition(pane.id, label)}
-                  onSetHeight={(inches) => onSetGolferHeight(video.id, inches)}
-                  onAnalyze={analyzePose}
-                  onClose={toggleSwingCheck}
-                />
-              ) : null}
+              {swingCheckOn && !checksDocked ? checksPanel : null}
 
               {selectedAnnotation && isActive && activeTool === "select" && pane.overlayVisible ? (
                 <ShapeLabelEditor
@@ -1081,6 +1105,8 @@ export function VideoPane({
             </div>
           )}
         </div>
+
+        {swingCheckOn && checksDocked ? checksPanel : null}
 
         <div className="shrink-0 border-t border-border bg-surface-1 px-2.5 py-1.5">
           <div className="flex flex-wrap items-center gap-2 @md:flex-nowrap">

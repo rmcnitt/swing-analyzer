@@ -120,6 +120,8 @@ interface SwingChecksPanelProps {
   frameTolerance: number;
   height: GolferHeight;
   corner: PanelCorner;
+  /** Sits below the video in the pane's column (narrow panes) instead of floating over it. */
+  docked?: boolean;
   onMoveCorner: (corner: PanelCorner) => void;
   onToggleCheck: (id: SwingCheckId) => void;
   onJump: (label: string) => void;
@@ -146,6 +148,7 @@ export function SwingChecksPanel({
   frameTolerance,
   height,
   corner,
+  docked = false,
   onMoveCorner,
   onToggleCheck,
   onJump,
@@ -293,9 +296,14 @@ export function SwingChecksPanel({
     <div
       ref={panelRef}
       className={cn(
-        "absolute z-10 w-[min(18rem,calc(100%-1rem))] overflow-hidden rounded-panel border border-border bg-surface-1 text-xs text-text shadow-float",
-        CORNER_CLASSES[corner],
-        drag ? "opacity-90" : null,
+        "bg-surface-1 text-xs text-text",
+        docked
+          ? "max-h-[45%] shrink-0 overflow-y-auto border-t border-border"
+          : cn(
+              "absolute z-10 w-[min(18rem,calc(100%-1rem))] overflow-hidden rounded-panel border border-border shadow-float",
+              CORNER_CLASSES[corner],
+              drag ? "opacity-90" : null,
+            ),
       )}
       style={drag ? { transform: `translate(${drag.dx}px, ${drag.dy}px)` } : undefined}
       // Keep clicks here from panning or drawing on the video underneath.
@@ -305,12 +313,12 @@ export function SwingChecksPanel({
     >
       <div
         className={cn(
-          "flex touch-none items-center gap-1.5 py-1 pl-2.5 pr-1",
-          drag ? "cursor-grabbing" : "cursor-grab",
+          "flex items-center gap-1.5 py-1 pl-2.5 pr-1",
+          docked ? null : drag ? "touch-none cursor-grabbing" : "touch-none cursor-grab",
         )}
-        title="Drag to move the panel to another corner"
+        title={docked ? undefined : "Drag to move the panel to another corner"}
         onPointerDown={(event) => {
-          if ((event.target as HTMLElement).closest("button")) {
+          if (docked || (event.target as HTMLElement).closest("button")) {
             return;
           }
 
@@ -327,7 +335,7 @@ export function SwingChecksPanel({
       >
         <Gauge className="size-3.5 shrink-0 text-accent" aria-hidden />
         <span className="select-none text-xs font-medium uppercase tracking-caps">Swing checks</span>
-        <GripHorizontal className={cn("size-3.5", muted)} aria-hidden />
+        {docked ? null : <GripHorizontal className={cn("size-3.5", muted)} aria-hidden />}
         <button
           type="button"
           onClick={() => setCollapsed((value) => !value)}
