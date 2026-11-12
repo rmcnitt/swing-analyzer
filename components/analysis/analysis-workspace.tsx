@@ -1031,7 +1031,7 @@ function WorkspaceView({
             className={`grid min-h-0 flex-1 ${
               // Side by side in landscape (desktop, iPad landscape), stacked in portrait.
               compareMode
-                ? "grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-1 landscape:grid-cols-2 landscape:grid-rows-1"
+                ? "grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-1 landscape:grid-cols-2 landscape:grid-rows-1 md:grid-cols-2 md:grid-rows-1"
                 : "grid-cols-1"
             }`}
           >
