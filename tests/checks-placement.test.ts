@@ -3,8 +3,8 @@ import { checksPanelPlacement } from "@/lib/analysis/checks-placement";
 
 describe("checksPanelPlacement", () => {
   it("docks in narrow panes (phone, iPad compare)", () => {
-    expect(checksPanelPlacement(390, 500, 9 / 16)).toBe("dock");
-    expect(checksPanelPlacement(478, 1000, 9 / 16)).toBe("dock");
+    expect(checksPanelPlacement(390, 500, 9 / 16)).toBe("below");
+    expect(checksPanelPlacement(478, 1000, 9 / 16)).toBe("below");
   });
 
   it("floats beside a portrait clip when the side margin fits the panel", () => {
@@ -12,9 +12,14 @@ describe("checksPanelPlacement", () => {
     expect(checksPanelPlacement(1030, 620, 9 / 16)).toBe("float");
   });
 
-  it("docks when a portrait clip leaves no room beside it (desktop compare)", () => {
-    expect(checksPanelPlacement(535, 620, 9 / 16)).toBe("dock");
-    expect(checksPanelPlacement(685, 620, 9 / 16)).toBe("dock");
+  it("docks beside a portrait clip when the margins together fit the panel (desktop compare)", () => {
+    // 685 wide, 745 tall → stage ~419 wide, 266 px spare: not enough; 700 tall → 394, 291 spare.
+    expect(checksPanelPlacement(685, 700, 9 / 16)).toBe("side");
+    expect(checksPanelPlacement(685, 745, 9 / 16)).toBe("below");
+  });
+
+  it("docks below when a portrait clip leaves no room beside it", () => {
+    expect(checksPanelPlacement(535, 620, 9 / 16)).toBe("below");
   });
 
   it("floats over a landscape clip's corner", () => {

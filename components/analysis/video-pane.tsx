@@ -743,11 +743,11 @@ export function VideoPane({
   };
 
   // Where the panel would cover the golfer, it sits below the video instead of over it.
-  const checksDocked =
-    checksPanelPlacement(mediaAreaSize.width, mediaAreaSize.height, stageAspectRatio) === "dock";
+  const checksPlacement = checksPanelPlacement(mediaAreaSize.width, mediaAreaSize.height, stageAspectRatio);
+  const checksDocked = checksPlacement !== "float";
   const checksPanel = (
     <SwingChecksPanel
-      docked={checksDocked}
+      docked={checksDocked ? (checksPlacement === "side" ? "side" : "below") : undefined}
       pose={poseState}
       data={swingCheck?.data ?? null}
       checks={pane.checks}
@@ -958,168 +958,176 @@ export function VideoPane({
         </div>
       </div>
 
-      <div ref={mediaAreaRef} className="flex min-h-0 flex-1 flex-col overflow-hidden bg-bg">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-bg">
         <div
-          ref={mediaViewportRef}
+          ref={mediaAreaRef}
           className={cn(
-            "relative min-h-[120px] w-full flex-1 touch-none overflow-hidden bg-bg",
-            canPan ? "cursor-grab active:cursor-grabbing" : null,
+            "flex min-h-0 flex-1 overflow-hidden",
+            swingCheckOn && checksPlacement === "side" ? "flex-row" : "flex-col",
           )}
-          onWheel={handleWheel}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
         >
-          {video && playbackProblem ? (
-            <div className="flex h-full items-center justify-center p-4">
-              <PlaybackProblemNotice
-                className="max-w-md"
-                problem={playbackProblem}
-                fileName={video.title}
-                mimeType={video.mimeType}
-              />
-            </div>
-          ) : video ? (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div
-                // Video and Konva overlay are transformed together so normalized annotations stay
-                // aligned; the canvas maps pointer positions back through this transform.
-                className="relative overflow-hidden bg-bg"
-                style={{
-                  width: `${stageSize.width}px`,
-                  height: `${stageSize.height}px`,
-                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                  transformOrigin: "center center",
-                }}
-              >
-                <video
-                  ref={videoRef}
-                  src={video.url}
-                  className="h-full w-full object-contain"
-                  playsInline
-                  preload="metadata"
-                  onLoadedMetadata={() => {
-                    const element = videoRef.current;
-                    const nextDuration = element?.duration || video.duration || 0;
+          <div
+            ref={mediaViewportRef}
+            className={cn(
+              "relative min-h-[120px] w-full flex-1 touch-none overflow-hidden bg-bg",
+              canPan ? "cursor-grab active:cursor-grabbing" : null,
+            )}
+            onWheel={handleWheel}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+          >
+            {video && playbackProblem ? (
+              <div className="flex h-full items-center justify-center p-4">
+                <PlaybackProblemNotice
+                  className="max-w-md"
+                  problem={playbackProblem}
+                  fileName={video.title}
+                  mimeType={video.mimeType}
+                />
+              </div>
+            ) : video ? (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div
+                  // Video and Konva overlay are transformed together so normalized annotations stay
+                  // aligned; the canvas maps pointer positions back through this transform.
+                  className="relative overflow-hidden bg-bg"
+                  style={{
+                    width: `${stageSize.width}px`,
+                    height: `${stageSize.height}px`,
+                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                    transformOrigin: "center center",
+                  }}
+                >
+                  <video
+                    ref={videoRef}
+                    src={video.url}
+                    className="h-full w-full object-contain"
+                    playsInline
+                    preload="metadata"
+                    onLoadedMetadata={() => {
+                      const element = videoRef.current;
+                      const nextDuration = element?.duration || video.duration || 0;
 
-                    setDuration(nextDuration);
+                      setDuration(nextDuration);
 
-                    // Audio-only decode: the browser lacks the video codec (common for HEVC).
-                    if (element && !element.videoWidth) {
-                      setMediaError({ url: video.url, problem: "unsupported" });
-                      return;
-                    }
-
-                    if (element) {
-                      // Loading a source resets the rate; restore it and the saved position.
-                      element.defaultPlaybackRate = baseRateRef.current;
-                      applyPlaybackRate(element, baseRateRef.current, rateMultiplierRef.current);
-
-                      if (pane.currentTime > 0 && pane.currentTime < nextDuration) {
-                        element.currentTime = pane.currentTime;
+                      // Audio-only decode: the browser lacks the video codec (common for HEVC).
+                      if (element && !element.videoWidth) {
+                        setMediaError({ url: video.url, problem: "unsupported" });
+                        return;
                       }
 
-                      timeStore.set(element.currentTime);
-                    }
+                      if (element) {
+                        // Loading a source resets the rate; restore it and the saved position.
+                        element.defaultPlaybackRate = baseRateRef.current;
+                        applyPlaybackRate(element, baseRateRef.current, rateMultiplierRef.current);
 
-                    if (video.id) {
-                      onVideoMetadata(video.id, {
-                        duration: nextDuration,
-                        width: element?.videoWidth || video.width,
-                        height: element?.videoHeight || video.height,
-                      });
-                    }
-                  }}
-                  onSeeked={syncTimeFromElement}
-                  onError={() =>
-                    setMediaError({
-                      url: video.url,
-                      problem: classifyMediaError(videoRef.current?.error?.code),
-                    })
-                  }
-                  onPlay={() => setIsPlaying(true)}
-                  onPause={() => {
-                    setIsPlaying(false);
-                    syncTimeFromElement();
-                  }}
-                  onEnded={() => syncGroup.onEnded(pane.id)}
-                />
+                        if (pane.currentTime > 0 && pane.currentTime < nextDuration) {
+                          element.currentTime = pane.currentTime;
+                        }
 
-                {showPose && poseTrack ? (
-                  <PoseOverlay
-                    track={poseTrack}
-                    timeStore={timeStore}
-                    width={stageSize.width}
-                    height={stageSize.height}
-                  />
-                ) : null}
+                        timeStore.set(element.currentTime);
+                      }
 
-                {swingCheck && poseTrack ? (
-                  <SwingCheckOverlay
-                    track={poseTrack}
-                    guides={swingCheck.guides}
-                    visible={checkVisibility}
-                    timeStore={timeStore}
-                    width={stageSize.width}
-                    height={stageSize.height}
-                  />
-                ) : null}
-
-                <AnnotationCanvas
-                  key={`${pane.id}-${video.id}-${video.width ?? 0}x${video.height ?? 0}`}
-                  paneId={pane.id}
-                  tool={activeTool}
-                  color={activeColor}
-                  strokeWidth={strokeWidth}
-                  annotations={annotations}
-                  visible={pane.overlayVisible}
-                  selectedAnnotationId={selectedAnnotationId}
-                  onSelectionChange={(annotationId) => onSelectionChange(pane.id, annotationId)}
-                  onChange={(next) => onAnnotationsChange(pane.id, next)}
-                  overlayRendererRef={overlayRendererRef}
-                />
-
-                {boxMode ? (
-                  <GolferBoxEditor
-                    initialBox={golferBox}
-                    onCancel={() => setBoxMode(false)}
-                    onCommit={(box) => {
-                      setBoxMode(false);
-                      onSetGolferBox(video.id, box);
-                      onUpdatePane(pane.id, { fitGolfer: true });
+                      if (video.id) {
+                        onVideoMetadata(video.id, {
+                          duration: nextDuration,
+                          width: element?.videoWidth || video.width,
+                          height: element?.videoHeight || video.height,
+                        });
+                      }
                     }}
+                    onSeeked={syncTimeFromElement}
+                    onError={() =>
+                      setMediaError({
+                        url: video.url,
+                        problem: classifyMediaError(videoRef.current?.error?.code),
+                      })
+                    }
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => {
+                      setIsPlaying(false);
+                      syncTimeFromElement();
+                    }}
+                    onEnded={() => syncGroup.onEnded(pane.id)}
+                  />
+
+                  {showPose && poseTrack ? (
+                    <PoseOverlay
+                      track={poseTrack}
+                      timeStore={timeStore}
+                      width={stageSize.width}
+                      height={stageSize.height}
+                    />
+                  ) : null}
+
+                  {swingCheck && poseTrack ? (
+                    <SwingCheckOverlay
+                      track={poseTrack}
+                      guides={swingCheck.guides}
+                      visible={checkVisibility}
+                      timeStore={timeStore}
+                      width={stageSize.width}
+                      height={stageSize.height}
+                    />
+                  ) : null}
+
+                  <AnnotationCanvas
+                    key={`${pane.id}-${video.id}-${video.width ?? 0}x${video.height ?? 0}`}
+                    paneId={pane.id}
+                    tool={activeTool}
+                    color={activeColor}
+                    strokeWidth={strokeWidth}
+                    annotations={annotations}
+                    visible={pane.overlayVisible}
+                    selectedAnnotationId={selectedAnnotationId}
+                    onSelectionChange={(annotationId) => onSelectionChange(pane.id, annotationId)}
+                    onChange={(next) => onAnnotationsChange(pane.id, next)}
+                    overlayRendererRef={overlayRendererRef}
+                  />
+
+                  {boxMode ? (
+                    <GolferBoxEditor
+                      initialBox={golferBox}
+                      onCancel={() => setBoxMode(false)}
+                      onCommit={(box) => {
+                        setBoxMode(false);
+                        onSetGolferBox(video.id, box);
+                        onUpdatePane(pane.id, { fitGolfer: true });
+                      }}
+                    />
+                  ) : null}
+                </div>
+
+                {swingCheckOn && !checksDocked ? checksPanel : null}
+
+                {selectedAnnotation && isActive && activeTool === "select" && pane.overlayVisible ? (
+                  <ShapeLabelEditor
+                    key={selectedAnnotation.id}
+                    annotation={selectedAnnotation}
+                    onCommit={(label) =>
+                      onAnnotationsChange(
+                        pane.id,
+                        annotations.map((annotation) =>
+                          annotation.id === selectedAnnotation.id
+                            ? { ...annotation, label: label || undefined }
+                            : annotation,
+                        ),
+                      )
+                    }
                   />
                 ) : null}
               </div>
+            ) : (
+              <div className="flex h-full items-center justify-center px-6 text-center text-sm text-text-muted">
+                Load a swing clip
+              </div>
+            )}
+          </div>
 
-              {swingCheckOn && !checksDocked ? checksPanel : null}
-
-              {selectedAnnotation && isActive && activeTool === "select" && pane.overlayVisible ? (
-                <ShapeLabelEditor
-                  key={selectedAnnotation.id}
-                  annotation={selectedAnnotation}
-                  onCommit={(label) =>
-                    onAnnotationsChange(
-                      pane.id,
-                      annotations.map((annotation) =>
-                        annotation.id === selectedAnnotation.id
-                          ? { ...annotation, label: label || undefined }
-                          : annotation,
-                      ),
-                    )
-                  }
-                />
-              ) : null}
-            </div>
-          ) : (
-            <div className="flex h-full items-center justify-center px-6 text-center text-sm text-text-muted">
-              Load a swing clip
-            </div>
-          )}
+          {swingCheckOn && checksDocked ? checksPanel : null}
         </div>
-
-        {swingCheckOn && checksDocked ? checksPanel : null}
 
         <div className="shrink-0 border-t border-border bg-surface-1 px-2.5 py-1.5">
           <div className="flex flex-wrap items-center gap-2 @md:flex-nowrap">

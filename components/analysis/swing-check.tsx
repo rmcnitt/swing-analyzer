@@ -120,8 +120,8 @@ interface SwingChecksPanelProps {
   frameTolerance: number;
   height: GolferHeight;
   corner: PanelCorner;
-  /** Sits below the video in the pane's column (narrow panes) instead of floating over it. */
-  docked?: boolean;
+  /** Docked beside or below the video (where floating would cover the golfer) instead of floating. */
+  docked?: "side" | "below";
   onMoveCorner: (corner: PanelCorner) => void;
   onToggleCheck: (id: SwingCheckId) => void;
   onJump: (label: string) => void;
@@ -148,7 +148,7 @@ export function SwingChecksPanel({
   frameTolerance,
   height,
   corner,
-  docked = false,
+  docked,
   onMoveCorner,
   onToggleCheck,
   onJump,
@@ -297,9 +297,11 @@ export function SwingChecksPanel({
       ref={panelRef}
       className={cn(
         "bg-surface-1 text-xs text-text",
-        docked
-          ? "max-h-[45%] shrink-0 overflow-y-auto border-t border-border"
-          : cn(
+        docked === "side"
+          ? "w-72 shrink-0 self-start overflow-y-auto border-b border-l border-border max-h-full"
+          : docked === "below"
+            ? "max-h-[45%] shrink-0 overflow-y-auto border-t border-border"
+            : cn(
               "absolute z-10 w-[min(18rem,calc(100%-1rem))] overflow-hidden rounded-panel border border-border shadow-float",
               CORNER_CLASSES[corner],
               drag ? "opacity-90" : null,
