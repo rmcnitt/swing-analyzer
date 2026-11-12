@@ -223,7 +223,8 @@ function WorkspaceView({
   // Safe to read localStorage during render: WorkspaceView only mounts on the client, after the
   // session has loaded, so there is no server render to mismatch.
   const [activeTool, setActiveTool] = useState<AnnotationTool>(
-    () => (loadUiPreference("active-tool") as AnnotationTool | null) ?? "line",
+    // Opens on Move, so a first drag on the video doesn't draw; drawing is one key or tap away.
+    () => (loadUiPreference("active-tool") as AnnotationTool | null) ?? "select",
   );
   // Phones: drawing tools stay tucked away until the pencil in the top bar opens them; while
   // they're closed a touch on the video never draws (existing drawings still show).
@@ -822,6 +823,13 @@ function WorkspaceView({
         break;
       case "speed":
         handleChangeRate(paneId, action.rate);
+        break;
+      case "position":
+        if (compareMode) {
+          handleJumpBoth(action.label);
+        } else {
+          handleJumpToPosition(paneId, action.label);
+        }
         break;
       case "tool":
         handleToolChange(action.tool);

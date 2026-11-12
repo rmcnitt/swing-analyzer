@@ -136,7 +136,7 @@ interface SwingChecksPanelProps {
 
 const muted = "text-text-muted";
 /** A unit after a number: one step down the type scale (11px under 13px values), faint. */
-const unitClass = "text-xs text-text-faint";
+const unitClass = "text-xs text-text-muted";
 
 /**
  * The per-pane "Swing checks" panel: a compact card in the top-left of the video (usually sky or

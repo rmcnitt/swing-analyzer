@@ -53,7 +53,7 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
           ))}
         </div>
 
-        <p className="mt-4 text-xs text-text-muted">
+        <p className="mt-4 text-sm text-text-muted">
           Playback keys act on the highlighted pane; click a pane to make it active.
         </p>
       </div>

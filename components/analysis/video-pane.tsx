@@ -7,6 +7,7 @@ import {
   useState,
   useSyncExternalStore,
   type PointerEvent,
+  type ReactNode,
   type WheelEvent,
 } from "react";
 import {
@@ -787,6 +788,54 @@ export function VideoPane({
   );
 
   const compact = layout === "compact";
+  const renderClipPicker = (className: string) => (
+    <select
+      value={pane.videoId ?? ""}
+      onChange={(event) => onSelectVideo(pane.id, event.target.value)}
+      className={className}
+      aria-label="Clip in this pane"
+    >
+      <option value="">Choose a saved swing</option>
+      <optgroup label="My swings">
+        {userVideos.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.title}
+          </option>
+        ))}
+      </optgroup>
+      {referenceVideos.length > 0 ? (
+        <optgroup label="References">
+          {referenceVideos.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.title}
+            </option>
+          ))}
+        </optgroup>
+      ) : null}
+    </select>
+  );
+  const renderUpload = (className: string, label: ReactNode) => (
+    <label className={cn("cursor-pointer", className)} title="Upload a clip into this pane">
+      <span className="inline-flex items-center gap-2">
+        <UploadCloud className="size-4" aria-hidden />
+        {label}
+      </span>
+      <input
+        type="file"
+        accept="video/*"
+        className="sr-only"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+
+          if (file) {
+            onUploadVideo(pane.id, file);
+          }
+
+          event.target.value = "";
+        }}
+      />
+    </label>
+  );
   const extraButtons = (
     <>
       <button
@@ -911,8 +960,8 @@ export function VideoPane({
                 aria-label="Rename video"
               />
             ) : (
-              <p className="truncate text-xs font-medium text-text phone:hidden compact:hidden">
-                {getVideoLabel(video?.title)}
+              <p className="truncate text-sm font-medium text-text phone:hidden compact:hidden">
+                {video ? getVideoLabel(video.title) : pane.label}
               </p>
             )}
             {canRenameVideo ? (
@@ -934,29 +983,36 @@ export function VideoPane({
                 {isRenaming ? <Check className="size-3.5" /> : <Pencil className="size-3.5" />}
               </button>
             ) : null}
-            {compareMode && isComparisonPane ? (
+            {compareMode && isComparisonPane && video ? (
               <span className="border border-border px-1.5 py-0.5 text-xs uppercase tracking-caps text-text-muted phone:hidden compact:hidden">
                 Compare
               </span>
             ) : null}
           </div>
-          <p
-            className={cn(
-              "mt-0.5 hidden truncate text-xs uppercase tracking-caps text-text-muted",
-              // Compact: no room; the clip picker beside it names the clip.
-              compact ? null : "@sm:block",
-            )}
-          >
-            {video
-              ? `${pane.label} / ${video.clubTag} / ${video.orientation}`
-              : isComparisonPane
-                ? "Choose a comparison source"
-                : pane.label}
-          </p>
+          {video ? (
+            <p
+              className={cn(
+                "mt-0.5 hidden truncate text-xs uppercase tracking-caps text-text-muted",
+                // Compact: no room; the clip picker beside it names the clip.
+                compact ? null : "@sm:block",
+              )}
+            >
+              {video
+                ? `${pane.label} / ${video.clubTag} / ${video.orientation}`
+                : isComparisonPane
+                  ? "Choose a comparison source"
+                  : pane.label}
+            </p>
+          ) : null}
         </div>
 
         <div className="flex min-w-fit items-center gap-2 phone:min-w-0 phone:flex-1 compact:min-w-0 compact:flex-1">
-          <div className="hidden items-center gap-0.5 rounded-control border border-border bg-bg/25 p-0.5 @sm:flex">
+          <div
+            className={cn(
+              "hidden items-center gap-0.5 rounded-control border border-border bg-bg/25 p-0.5",
+              video ? "@sm:flex" : null,
+            )}
+          >
             <button
               type="button"
               onClick={() => updateZoom(zoom - 0.25)}
@@ -1021,52 +1077,17 @@ export function VideoPane({
             ) : null}
           </div>
 
-          <label
-            className="flex shrink-0 cursor-pointer items-center border border-border px-2 py-1.5 text-xs text-text hover:border-accent pointer-coarse:h-10"
-            title="Upload a clip into this pane"
-          >
-            <span className="inline-flex items-center gap-2">
-              <UploadCloud className="size-4" />
-              <span className="hidden @2xl:inline">Upload</span>
-            </span>
-            <input
-              type="file"
-              accept="video/*"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-
-                if (file) {
-                  onUploadVideo(pane.id, file);
-                }
-              }}
-            />
-          </label>
-
-          <select
-            value={pane.videoId ?? ""}
-            onChange={(event) => onSelectVideo(pane.id, event.target.value)}
-            className="max-w-36 border border-border bg-bg px-2 py-1.5 text-xs text-text @lg:max-w-52 pointer-coarse:h-10 phone:min-w-0 phone:max-w-none phone:flex-1 compact:min-w-0 compact:max-w-none compact:flex-1"
-            aria-label="Clip in this pane"
-          >
-            <option value="">Choose saved swing</option>
-            <optgroup label="My swings">
-              {userVideos.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.title}
-                </option>
-              ))}
-            </optgroup>
-            {referenceVideos.length > 0 ? (
-              <optgroup label="References">
-                {referenceVideos.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.title}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-          </select>
+          {video ? (
+            <>
+              {renderUpload(
+                "flex shrink-0 items-center border border-border px-2 py-1.5 text-xs text-text hover:border-accent pointer-coarse:h-10",
+                <span className="hidden @2xl:inline">Upload</span>,
+              )}
+              {renderClipPicker(
+                "max-w-36 border border-border bg-bg px-2 py-1.5 text-xs text-text @lg:max-w-52 pointer-coarse:h-10 phone:min-w-0 phone:max-w-none phone:flex-1 compact:min-w-0 compact:max-w-none compact:flex-1",
+              )}
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -1254,8 +1275,20 @@ export function VideoPane({
                 ) : null}
               </div>
             ) : (
-              <div className="flex h-full items-center justify-center px-6 text-center text-sm text-text-muted">
-                Load a swing clip
+              // Empty pane (DESIGN.md: one line, one action): pick a saved swing or upload one, right here.
+              <div className="flex h-full flex-col items-center justify-center gap-3 px-6">
+                <p className="text-sm text-text-muted">
+                  {isComparisonPane ? "Pick a swing to compare" : "Pick a swing to review"}
+                </p>
+                <div className="flex w-full max-w-xs flex-col gap-2">
+                  {renderClipPicker(
+                    "h-10 w-full rounded-control border border-border-strong bg-surface-1 px-3 text-sm text-text",
+                  )}
+                  {renderUpload(
+                    "flex h-10 items-center justify-center rounded-control border border-border px-3 text-sm text-text-muted hover:border-border-strong hover:text-text",
+                    "Upload a clip",
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1263,6 +1296,7 @@ export function VideoPane({
           {swingCheckOn && checksDocked && layout !== "phone" ? checksPanel : null}
         </div>
 
+        {video ? (
         <div className="flex shrink-0 flex-col border-t border-border bg-surface-1 px-2.5 py-1.5 compact:px-1.5 compact:py-1">
           <div className="flex flex-wrap items-center gap-2 @md:flex-nowrap phone:justify-between phone:gap-1.5 compact:flex-nowrap compact:gap-1.5">
             <button
@@ -1363,6 +1397,7 @@ export function VideoPane({
             />
           ) : null}
         </div>
+        ) : null}
 
         {/* Phone: the page scrolls, so the panel goes after the controls instead of squeezing the video. */}
         {swingCheckOn && checksDocked && layout === "phone" ? checksPanel : null}

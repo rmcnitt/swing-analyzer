@@ -5,21 +5,26 @@ export default function NotFound() {
   return (
     <div className="min-h-screen bg-bg">
       <SiteHeader />
-      <main className="mx-auto flex max-w-4xl flex-1 flex-col items-center justify-center px-6 py-20 text-center">
-        <p className="text-xs uppercase tracking-caps text-text-muted">
-          Session not found
+      <main className="mx-auto w-full max-w-6xl px-4 py-16 lg:px-6 lg:py-24">
+        <h1 className="text-xl font-semibold text-text">This page or swing isn&rsquo;t here.</h1>
+        <p className="mt-3 max-w-xl text-base text-text-muted">
+          Swings are saved in the browser they were opened in, so a link from another device or
+          browser won&rsquo;t find them.
         </p>
-        <h1 className="mt-4 text-4xl font-semibold text-text">That swing workspace does not exist.</h1>
-        <p className="mt-5 max-w-2xl text-base leading-8 text-text-muted">
-          It may have been created in another browser. Sessions are stored locally on this
-          device. Import a swing from the hub to start a new one.
-        </p>
-        <Link
-          href="/"
-          className="mt-8 inline-flex rounded-full bg-accent px-5 py-3 text-sm font-semibold text-bg"
-        >
-          Back to hub
-        </Link>
+        <div className="mt-8 flex flex-col gap-2 sm:flex-row">
+          <Link
+            href="/library"
+            className="inline-flex h-10 items-center justify-center rounded-control bg-accent px-4 text-sm font-semibold text-bg"
+          >
+            Go to your library
+          </Link>
+          <Link
+            href="/"
+            className="inline-flex h-10 items-center justify-center rounded-control border border-border px-4 text-sm text-text hover:border-border-strong"
+          >
+            Home
+          </Link>
+        </div>
       </main>
     </div>
   );

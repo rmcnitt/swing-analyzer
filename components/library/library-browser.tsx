@@ -200,7 +200,7 @@ function LibrarySection({
     <section id={id} className="mt-10 scroll-mt-16" aria-label={title}>
       <h2 className="flex items-baseline gap-2 border-b border-border pb-2 text-xs uppercase tracking-caps text-text-muted">
         {title}
-        <span className="font-mono text-text-faint">{count}</span>
+        <span className="font-mono text-text-muted">{count}</span>
       </h2>
       <div className="mt-4">{children}</div>
     </section>

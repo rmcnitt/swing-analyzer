@@ -65,7 +65,7 @@ export function ComparePositionBar({
         >
           {syncEnabled ? <Link2 className="size-3.5" /> : <Link2Off className="size-3.5" />}
         </button>
-        <p className="truncate text-xs text-text-muted compact:hidden">
+        <p className="truncate text-sm text-text-muted compact:hidden">
           {syncSummary(syncEnabled, checkpoints)}
         </p>
       </div>

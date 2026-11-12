@@ -31,7 +31,7 @@ export function PlaybackProblemNotice({
           {title}
           {fileName ? <span className="font-normal text-text-muted"> ({fileName})</span> : null}
         </p>
-        <p className="mt-1 text-xs leading-relaxed text-text-muted">{detail}</p>
+        <p className="mt-1 text-sm text-text-muted">{detail}</p>
       </div>
       {onDismiss ? (
         <button

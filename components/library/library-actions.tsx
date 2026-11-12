@@ -108,7 +108,7 @@ export function ConfirmDeleteButton({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={`Confirm deleting ${label}`}>
-      <span className="max-w-48 text-xs leading-tight text-text-muted">
+      <span className="max-w-56 text-sm text-text-muted">
         {consequence}
       </span>
       <button

@@ -323,7 +323,7 @@ export function PositionBar({
       ) : null}
 
       {autoNote ? (
-        <span role="status" className="shrink-0 whitespace-nowrap px-1 text-xs text-text-muted">
+        <span role="status" className="shrink-0 whitespace-nowrap px-1 text-sm text-text-muted">
           {autoNote}
         </span>
       ) : null}

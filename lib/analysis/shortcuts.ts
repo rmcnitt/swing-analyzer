@@ -1,6 +1,7 @@
+import { SWING_POSITIONS, type SwingPosition } from "@/lib/analysis/positions";
 import type { AnnotationTool } from "@/lib/types";
 
-/** Playback speeds offered in each pane; keys 1–5 pick them in order. */
+/** Playback speeds offered in each pane; Shift+1–5 pick them in order. */
 export const SPEED_OPTIONS = [0.1, 0.25, 0.5, 0.75, 1] as const;
 
 export const TOOL_HOTKEYS: Record<AnnotationTool, string> = {
@@ -19,6 +20,7 @@ export type ShortcutAction =
   | { type: "toggle-play" }
   | { type: "step"; frames: number }
   | { type: "speed"; rate: number }
+  | { type: "position"; label: SwingPosition }
   | { type: "tool"; tool: AnnotationTool }
   | { type: "undo" }
   | { type: "redo" }
@@ -32,6 +34,8 @@ export type ShortcutAction =
 
 export interface KeyInput {
   key: string;
+  /** Physical key ("Digit1"): Shift turns "1" into "!" on most layouts, so digits read this. */
+  code?: string;
   shiftKey: boolean;
   metaKey: boolean;
   ctrlKey: boolean;
@@ -43,7 +47,7 @@ const toolsByKey = new Map(
 );
 
 /** Resolves a keydown to a workspace action, or null if the key isn't a shortcut. */
-export function resolveShortcut({ key, shiftKey, metaKey, ctrlKey, altKey }: KeyInput): ShortcutAction | null {
+export function resolveShortcut({ key, code, shiftKey, metaKey, ctrlKey, altKey }: KeyInput): ShortcutAction | null {
   const command = metaKey || ctrlKey;
   const lower = key.toLowerCase();
 
@@ -83,9 +87,19 @@ export function resolveShortcut({ key, shiftKey, metaKey, ctrlKey, altKey }: Key
       return { type: "escape" };
   }
 
-  if (/^[1-9]$/.test(key)) {
-    const rate = SPEED_OPTIONS[Number(key) - 1];
-    return rate === undefined ? null : { type: "speed", rate };
+  // 1–4 jump to Address, Top, Impact, Finish; Shift+1–5 pick a speed.
+  const digit = /^(?:Digit|Numpad)([1-9])$/.exec(code ?? "")?.[1] ?? (/^[1-9]$/.test(key) ? key : null);
+
+  if (digit) {
+    const index = Number(digit) - 1;
+
+    if (shiftKey) {
+      const rate = SPEED_OPTIONS[index];
+      return rate === undefined ? null : { type: "speed", rate };
+    }
+
+    const label = SWING_POSITIONS[index];
+    return label === undefined ? null : { type: "position", label };
   }
 
   if (shiftKey) {
@@ -137,7 +151,8 @@ export const SHORTCUT_GROUPS: Array<{ title: string; items: Array<[keys: string,
       ["Space", "Play / pause"],
       ["← / →", "Previous / next frame"],
       ["⇧ ← / ⇧ →", "Back / forward 10 frames"],
-      ["1 – 5", `Speed ${SPEED_OPTIONS.map((rate) => `${rate}x`).join(", ")}`],
+      ["1 – 4", SWING_POSITIONS.join(", ") + " (both panes when comparing)"],
+      ["⇧ 1 – 5", `Speed ${SPEED_OPTIONS.map((rate) => `${rate}x`).join(", ")}`],
       ["[ / ]", "Loop in / out at current frame"],
       ["R", "Loop on / off"],
     ],

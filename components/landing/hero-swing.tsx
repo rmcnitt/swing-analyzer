@@ -141,7 +141,7 @@ export function HeroSwing({ className }: { className?: string }) {
       <div className="flex h-10 items-center justify-between border-b border-border px-3">
         <div className="flex items-center gap-2">
           <span className="size-2 bg-accent" aria-hidden />
-          <span className="text-xs font-medium text-text">Sample swing (face-on)</span>
+          <span className="text-sm font-medium text-text">Sample swing (face-on)</span>
         </div>
         <span className="font-mono text-xs text-text-muted">{RATE}x</span>
       </div>
@@ -244,13 +244,13 @@ function HeroTransport({
           ))}
         </div>
 
-        <dl className="flex gap-4 font-mono text-xs">
+        <dl className="flex gap-4 font-mono text-sm">
           {swing?.tempo ? (
             <div className="flex gap-1.5">
               <dt className="text-text-muted">Tempo</dt>
               <dd className="text-text">
                 {swing.tempo.ratio.toFixed(1)}
-                <span className="text-text-faint">:1</span>
+                <span className="text-text-muted">:1</span>
               </dd>
             </div>
           ) : null}
@@ -259,7 +259,7 @@ function HeroTransport({
               <dt className="text-text-muted">Head at impact</dt>
               <dd className="text-text">
                 {Math.abs(impact.down).toFixed(1)}
-                <span className="text-text-faint"> in {impact.down >= 0 ? "down" : "up"}</span>
+                <span className="text-text-muted"> in {impact.down >= 0 ? "down" : "up"}</span>
               </dd>
             </div>
           ) : null}

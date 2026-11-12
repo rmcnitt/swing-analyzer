@@ -9,9 +9,14 @@ describe("resolveShortcut", () => {
     expect(press(" ")).toEqual({ type: "toggle-play" });
     expect(press("ArrowLeft")).toEqual({ type: "step", frames: -1 });
     expect(press("ArrowRight", { shiftKey: true })).toEqual({ type: "step", frames: 10 });
-    expect(press("1")).toEqual({ type: "speed", rate: 0.1 });
-    expect(press("5")).toEqual({ type: "speed", rate: 1 });
-    expect(press("6")).toBeNull();
+    expect(press("1")).toEqual({ type: "position", label: "Address" });
+    expect(press("4")).toEqual({ type: "position", label: "Finish" });
+    expect(press("5")).toBeNull();
+    // Shift+digit reports "!" etc., so speeds read the physical key.
+    expect(press("!", { code: "Digit1", shiftKey: true })).toEqual({ type: "speed", rate: 0.1 });
+    expect(press("%", { code: "Digit5", shiftKey: true })).toEqual({ type: "speed", rate: 1 });
+    expect(press("^", { code: "Digit6", shiftKey: true })).toBeNull();
+    expect(press("2", { code: "Numpad2" })).toEqual({ type: "position", label: "Top" });
   });
 
   it("maps tool hotkeys case-insensitively, but not with modifiers", () => {
