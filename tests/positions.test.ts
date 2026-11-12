@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  clearPositionMarker,
+  customMarkers,
   isSwingPosition,
+  nextCustomLabel,
   paneMarkers,
   positionTimes,
   upsertPositionMarker,
@@ -57,5 +60,32 @@ describe("positions", () => {
     const next = upsertPositionMarker(markers, marker({ id: "new", label: "TOP", videoId: "clip-1", time: 1.2 }));
 
     expect(next.map((m) => m.id)).toEqual(["other-pane", "other-clip", "impact", "new"]);
+  });
+});
+
+describe("custom markers", () => {
+  it("lists only non-position markers, earliest first", () => {
+    const markers = [
+      marker({ id: "a", label: "Lag", time: 2 }),
+      marker({ id: "b", label: "Top", time: 1 }),
+      marker({ id: "c", label: "P2", time: 0.5 }),
+    ];
+    expect(customMarkers(markers).map((m) => m.id)).toEqual(["c", "a"]);
+  });
+
+  it("names the next custom marker without reusing a name", () => {
+    expect(nextCustomLabel([])).toBe("Custom 1");
+    expect(nextCustomLabel([marker({ label: "Custom 1" }), marker({ label: "custom 2 " })])).toBe("Custom 3");
+  });
+
+  it("clears a position only on the pane's current clip", () => {
+    const markers = [
+      marker({ id: "a", label: "Top", videoId: "v1" }),
+      marker({ id: "b", label: "Top", videoId: "v2" }),
+      marker({ id: "c", label: "Top", paneId: "secondary", videoId: "v1" }),
+      marker({ id: "d", label: "Impact", videoId: "v1" }),
+    ];
+    const kept = clearPositionMarker(markers, { id: "primary", videoId: "v1" }, "top");
+    expect(kept.map((m) => m.id)).toEqual(["b", "c", "d"]);
   });
 });

@@ -44,6 +44,7 @@ import { createTimeStore, type TimeStore } from "@/lib/video/time-store";
 import { PlaybackProblemNotice } from "@/components/analysis/playback-problem-notice";
 import { getContainedStageSize, getVideoAspectRatio } from "@/lib/video-layout";
 import { checksPanelPlacement } from "@/lib/analysis/checks-placement";
+import { customMarkers, nextCustomLabel } from "@/lib/analysis/positions";
 import { clampPan, fitFraming, MAX_ZOOM, MIN_ZOOM } from "@/lib/analysis/framing";
 import { defaultLoop } from "@/lib/analysis/loop";
 import { GolferBoxEditor } from "@/components/analysis/golfer-box-editor";
@@ -131,7 +132,13 @@ interface VideoPaneProps {
   onSetGolferHeight: (videoId: string, inches: number) => void;
   /** Registers this pane's frame capture (video + drawings) for PNG export. */
   onRegisterCapture: (paneId: PaneId, capture: (() => HTMLCanvasElement | null) | null) => void;
+  /** Adds a marker at `time` (a swing position replaces its old mark; any other name is custom). */
   onMarkPosition: (paneId: PaneId, label: string, time: number) => void;
+  onClearPosition: (paneId: PaneId, label: string) => void;
+  onSeekMarker: (marker: SnapshotMarker) => void;
+  onMoveMarker: (markerId: string, time: number) => void;
+  onRenameMarker: (markerId: string, label: string) => void;
+  onDeleteMarker: (markerId: string) => void;
 }
 
 
@@ -174,6 +181,11 @@ export function VideoPane({
   onAnnotationsChange,
   onJumpToPosition,
   onMarkPosition,
+  onClearPosition,
+  onSeekMarker,
+  onMoveMarker,
+  onRenameMarker,
+  onDeleteMarker,
   onSetGolferBox,
   golferHeight,
   onSetGolferHeight,
@@ -528,6 +540,7 @@ export function VideoPane({
   );
 
   const togglePlayback = () => syncGroup.togglePlay(pane.id);
+  const currentFrameTime = () => videoRef.current?.currentTime ?? timeStore.get();
 
   const seekTo = (time: number) => {
     syncGroup.seek(pane.id, time);
@@ -1233,9 +1246,15 @@ export function VideoPane({
               canAutoDetect={canAutoDetect}
               onAutoDetect={onAutoPositions}
               onJump={(label) => onJumpToPosition(pane.id, label)}
-              onMark={(label) =>
-                onMarkPosition(pane.id, label, videoRef.current?.currentTime ?? timeStore.get())
-              }
+              custom={customMarkers(markers)}
+              nextCustomLabel={nextCustomLabel(markers)}
+              onMark={(label) => onMarkPosition(pane.id, label, currentFrameTime())}
+              onClearPosition={(label) => onClearPosition(pane.id, label)}
+              onAddCustom={(label) => onMarkPosition(pane.id, label, currentFrameTime())}
+              onSeekCustom={onSeekMarker}
+              onMoveCustom={(markerId) => onMoveMarker(markerId, currentFrameTime())}
+              onRenameCustom={onRenameMarker}
+              onDeleteCustom={onDeleteMarker}
             />
           ) : null}
         </div>

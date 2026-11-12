@@ -11,20 +11,17 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { startTransition } from "react";
 import {
   Columns2,
   ImageDown,
   Keyboard,
   LibraryBig,
-  PanelRightClose,
-  PanelRightOpen,
   Save,
 } from "lucide-react";
 import { AnalysisToolbar } from "@/components/analysis/analysis-toolbar";
 import { ComparePositionBar } from "@/components/analysis/compare-position-bar";
 import { PlaybackProblemNotice } from "@/components/analysis/playback-problem-notice";
-import { SessionSidebar } from "@/components/analysis/session-sidebar";
+import { NotesPopover } from "@/components/analysis/notes-popover";
 import { ShortcutsDialog } from "@/components/analysis/shortcuts-dialog";
 import { VideoPane } from "@/components/analysis/video-pane";
 import {
@@ -55,6 +52,7 @@ import { DEFAULT_FPS, frameIndexAt } from "@/lib/analysis/frames";
 import { DEFAULT_STROKE_WIDTH, STROKE_WIDTHS } from "@/lib/analysis/annotations";
 import { defaultLoop, setLoopPoint } from "@/lib/analysis/loop";
 import {
+  clearPositionMarker,
   isSwingPosition,
   paneMarkers,
   positionKey,
@@ -248,10 +246,6 @@ function WorkspaceView({
 
   useEffect(() => () => poseStore.cancelAll(), [poseStore]);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
-  // Docked at xl and up; below that it's a drawer over the video, so start closed.
-  const [inspectorOpen, setInspectorOpen] = useState(
-    () => window.matchMedia("(min-width: 1280px)").matches,
-  );
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const capturesRef = useRef(new Map<PaneId, () => HTMLCanvasElement | null>());
   const registerCapture = useCallback(
@@ -333,7 +327,6 @@ function WorkspaceView({
     return autoBox ? { ...merged, golferBox: autoBox } : merged;
   });
   const allVideos = videos;
-  const references = allVideos.filter((video) => video.sourceType === "reference");
   const getVideo = (videoId?: string) => allVideos.find((video) => video.id === videoId);
   const visiblePanes = compareMode
     ? session.panes
@@ -533,17 +526,6 @@ function WorkspaceView({
     });
   };
 
-  const handleAddMarker = (label?: string) => {
-    const activeTime =
-      syncGroup.get(effectiveActivePaneId)?.currentTime ?? activePane?.currentTime ?? 0;
-
-    addMarker(
-      effectiveActivePaneId,
-      label?.trim() || `Checkpoint ${session.snapshotMarkers.length + 1}`,
-      activeTime,
-    );
-  };
-
   const findPositionMarker = (paneId: PaneId, label: string) => {
     const time = positionsByPane[paneId].get(positionKey(label));
     return time === undefined ? undefined : { paneId, time };
@@ -593,27 +575,29 @@ function WorkspaceView({
     }));
   };
 
+  const handleMoveMarker = (markerId: string, time: number) => {
+    setSession((current) => ({
+      ...current,
+      snapshotMarkers: current.snapshotMarkers.map((marker) =>
+        marker.id === markerId ? { ...marker, time: Number(time.toFixed(4)) } : marker,
+      ),
+    }));
+  };
+
+  const handleClearPosition = (paneId: PaneId, label: string) => {
+    setSession((current) => {
+      const pane = current.panes.find((candidate) => candidate.id === paneId);
+      return pane
+        ? { ...current, snapshotMarkers: clearPositionMarker(current.snapshotMarkers, pane, label) }
+        : current;
+    });
+  };
+
   const handleDeleteMarker = (markerId: string) => {
     setSession((current) => ({
       ...current,
       snapshotMarkers: current.snapshotMarkers.filter((marker) => marker.id !== markerId),
     }));
-  };
-
-  const handleLoadReference = (videoId: string) => {
-    const reference = getVideo(videoId);
-
-    if (!reference) {
-      return;
-    }
-
-    startTransition(() => {
-      setSession((current) => loadReferenceIntoSecondary(current, reference));
-    });
-
-    if (!compareMode) {
-      handleSetCompareMode(true);
-    }
   };
 
   const handleToggleSync = () => {
@@ -961,18 +945,10 @@ function WorkspaceView({
           >
             <Keyboard className="size-4" />
           </button>
-          <button
-            type="button"
-            onClick={() => setInspectorOpen((current) => !current)}
-            className="flex size-8 items-center justify-center border border-border text-text-muted hover:border-border-strong hover:text-text"
-            aria-label={inspectorOpen ? "Hide inspector" : "Show inspector"}
-          >
-            {inspectorOpen ? (
-              <PanelRightClose className="size-4" />
-            ) : (
-              <PanelRightOpen className="size-4" />
-            )}
-          </button>
+          <NotesPopover
+            notes={session.notes}
+            onNotesChange={(value) => setSession((current) => ({ ...current, notes: value }))}
+          />
         </div>
       </header>
 
@@ -1074,6 +1050,11 @@ function WorkspaceView({
                 onAnnotationsChange={updateAnnotations}
                 onJumpToPosition={handleJumpToPosition}
                 onMarkPosition={addMarker}
+                onClearPosition={handleClearPosition}
+                onSeekMarker={handleSeekMarker}
+                onMoveMarker={handleMoveMarker}
+                onRenameMarker={handleRenameMarker}
+                onDeleteMarker={handleDeleteMarker}
                 onSetGolferBox={handleSetGolferBox}
                 golferHeight={golferHeightFor(getVideo(pane.videoId))}
                 onSetGolferHeight={handleSetGolferHeight}
@@ -1083,40 +1064,6 @@ function WorkspaceView({
           </div>
         </main>
 
-        {inspectorOpen ? (
-          <>
-            <div
-              className="fixed inset-0 z-30 bg-bg/50 xl:hidden"
-              onClick={() => setInspectorOpen(false)}
-              aria-hidden="true"
-            />
-            <div className="fixed inset-y-0 right-0 z-40 w-[300px] max-w-[85vw] xl:static xl:z-auto xl:max-w-none xl:shrink-0">
-              <SessionSidebar
-                onClose={() => setInspectorOpen(false)}
-                sessionTitle={session.title}
-                notes={session.notes}
-                syncEnabled={session.syncEnabled}
-                activePaneId={effectiveActivePaneId}
-                markers={[...markersByPane.primary, ...(compareMode ? markersByPane.secondary : [])]}
-                references={references}
-                lastSavedAt={lastSavedAt}
-                onNotesChange={(value) =>
-                  setSession((current) => ({
-                    ...current,
-                    notes: value,
-                  }))
-                }
-                onToggleSync={handleToggleSync}
-                onSave={handleManualSave}
-                onAddMarker={handleAddMarker}
-                onSeekMarker={handleSeekMarker}
-                onRenameMarker={handleRenameMarker}
-                onDeleteMarker={handleDeleteMarker}
-                onLoadReference={handleLoadReference}
-              />
-            </div>
-          </>
-        ) : null}
       </div>
 
       {shortcutsOpen ? <ShortcutsDialog onClose={() => setShortcutsOpen(false)} /> : null}

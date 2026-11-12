@@ -66,3 +66,31 @@ export function upsertPositionMarker(
 
   return [...kept, marker];
 }
+
+/** Markers that aren't one of the standard swing positions (user-named), earliest first. */
+export function customMarkers(markers: SnapshotMarker[]) {
+  return markers.filter((marker) => !isSwingPosition(marker.label)).sort((a, b) => a.time - b.time);
+}
+
+/** A name for the next custom marker in a pane: "Custom 1", "Custom 2", … skipping names in use. */
+export function nextCustomLabel(markers: SnapshotMarker[]) {
+  const used = new Set(markers.map((marker) => positionKey(marker.label)));
+  let index = 1;
+
+  while (used.has(positionKey(`Custom ${index}`))) {
+    index += 1;
+  }
+
+  return `Custom ${index}`;
+}
+
+/** Removes a swing position's marker(s) from one pane's clip (the inverse of upsertPositionMarker). */
+export function clearPositionMarker(
+  markers: SnapshotMarker[],
+  pane: Pick<AnalysisPane, "id" | "videoId">,
+  label: string,
+): SnapshotMarker[] {
+  const key = positionKey(label);
+  const onClip = new Set(paneMarkers(markers, pane).map((marker) => marker.id));
+  return markers.filter((marker) => !(onClip.has(marker.id) && positionKey(marker.label) === key));
+}
