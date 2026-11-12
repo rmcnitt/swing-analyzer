@@ -18,8 +18,8 @@ const videoBlobStoreName = "video-blobs";
 const thumbnailBlobStoreName = "thumbnail-blobs";
 const metaStoreName = "meta";
 /** Bump when the bundled samples change: browsers that already have them get the new versions. */
-const seededKey = "seeded-samples-v3";
-const earlierSeededKeys = ["seeded-samples-v1", "seeded-samples-v2"];
+const seededKey = "seeded-samples-v4";
+const earlierSeededKeys = ["seeded-samples-v1", "seeded-samples-v2", "seeded-samples-v3"];
 const preferencePrefix = "swing-analyzer-ui";
 
 type StoreName =

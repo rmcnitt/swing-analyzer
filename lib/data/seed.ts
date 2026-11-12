@@ -138,7 +138,8 @@ export const sampleSessions: AnalysisSession[] = [
     snapshotMarkers: positionMarkers("sample-session-dtl", "primary", "sample-video-down-the-line", {
       Address: 1.0,
       Top: 1.82,
-      Impact: 2.05,
+      // Frame 125 (mid-frame time): clubhead on the ball, which is gone in frame 126.
+      Impact: 2.0917,
       Finish: 3.0,
     }),
   },
