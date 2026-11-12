@@ -11,6 +11,7 @@ import {
 } from "react";
 import {
   Check,
+  ChevronDown,
   Gauge,
   Pencil,
   Maximize2,
@@ -24,6 +25,7 @@ import {
   Repeat,
   SkipBack,
   SkipForward,
+  SlidersHorizontal,
   UploadCloud,
   X,
 } from "lucide-react";
@@ -39,6 +41,8 @@ import {
 } from "@/lib/analysis/frames";
 import { SPEED_OPTIONS } from "@/lib/analysis/shortcuts";
 import type { SyncGroup, SyncMedia } from "@/lib/analysis/sync-group";
+import type { WorkspaceLayout } from "@/lib/analysis/workspace-layout";
+import { layoutPoint } from "@/lib/analysis/screen-rotation";
 import { detectVideoFps } from "@/lib/video/media";
 import { classifyMediaError, type PlaybackProblem } from "@/lib/video/playback-errors";
 import { createTimeStore, type TimeStore } from "@/lib/video/time-store";
@@ -100,8 +104,11 @@ interface VideoPaneProps {
   canAutoDetect: boolean;
   onAutoPositions: () => void;
   activeTool: AnnotationTool;
-  /** Phone layout: natural height in a scrolling page, chips and timeline above the buttons. */
-  phoneLayout?: boolean;
+  /**
+   * "phone": natural height in a scrolling page, chips and timeline above the buttons.
+   * "compact" (phone landscape / phone compare): one slim row; the rest behind "More controls".
+   */
+  layout?: WorkspaceLayout;
   activeColor: HexColor;
   strokeWidth: number;
   selectedAnnotationId?: string | null;
@@ -165,7 +172,7 @@ export function VideoPane({
   canAutoDetect,
   onAutoPositions,
   activeTool,
-  phoneLayout = false,
+  layout = "desktop",
   activeColor,
   strokeWidth,
   selectedAnnotationId,
@@ -404,6 +411,8 @@ export function VideoPane({
 
   const [manualFraming, setManualFraming] = useState({ zoom: 1, pan: { x: 0, y: 0 } });
   const [boxMode, setBoxMode] = useState(false);
+  /** Compact layout: the header, extra buttons and this pane's chips are open. */
+  const [expanded, setExpanded] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [draftTitle, setDraftTitle] = useState(video?.title ?? "");
   const [mediaAreaSize, setMediaAreaSize] = useState({ width: 0, height: 0 });
@@ -717,9 +726,11 @@ export function VideoPane({
     }
 
     event.currentTarget.setPointerCapture(event.pointerId);
+    // Layout coordinates, so panning follows the finger in turned phone compare too.
+    const point = layoutPoint(event.clientX, event.clientY);
     panStartRef.current = {
-      pointerX: event.clientX,
-      pointerY: event.clientY,
+      pointerX: point.x,
+      pointerY: point.y,
       panX: pan.x,
       panY: pan.y,
     };
@@ -730,11 +741,12 @@ export function VideoPane({
       return;
     }
 
+    const point = layoutPoint(event.clientX, event.clientY);
     setFraming({
       zoom,
       pan: {
-        x: panStartRef.current.panX + event.clientX - panStartRef.current.pointerX,
-        y: panStartRef.current.panY + event.clientY - panStartRef.current.pointerY,
+        x: panStartRef.current.panX + point.x - panStartRef.current.pointerX,
+        y: panStartRef.current.panY + point.y - panStartRef.current.pointerY,
       },
     });
   };
@@ -748,7 +760,9 @@ export function VideoPane({
   };
 
   // Where the panel would cover the golfer, it sits below the video instead of over it.
-  const checksPlacement = checksPanelPlacement(mediaAreaSize.width, mediaAreaSize.height, stageAspectRatio);
+  const checksPlacement = checksPanelPlacement(mediaAreaSize.width, mediaAreaSize.height, stageAspectRatio, {
+    compact: layout === "compact",
+  });
   const checksDocked = checksPlacement !== "float";
   const checksPanel = (
     <SwingChecksPanel
@@ -772,18 +786,104 @@ export function VideoPane({
     />
   );
 
+  const compact = layout === "compact";
+  const extraButtons = (
+    <>
+      <button
+        type="button"
+        onClick={toggleLoop}
+        disabled={!video}
+        aria-pressed={Boolean(loop)}
+        className={cn(
+          "flex size-8 shrink-0 items-center justify-center border disabled:opacity-40 pointer-coarse:size-10",
+          loop
+            ? "border-accent bg-accent-dim text-text"
+            : "border-border text-text-muted hover:border-border-strong hover:text-text",
+        )}
+        aria-label={loop ? "Stop looping" : "Loop"}
+        title={loop ? "Stop looping (R)" : "Loop a range (R); drag the in/out handles or press [ and ]"}
+      >
+        <Repeat className="size-4" />
+      </button>
+
+      <button
+        type="button"
+        onClick={toggleSwingCheck}
+        disabled={!video || Boolean(playbackProblem)}
+        aria-pressed={swingCheckOn}
+        className={cn(
+          "flex size-8 shrink-0 items-center justify-center border disabled:opacity-40 pointer-coarse:size-10",
+          swingCheckOn
+            ? "border-accent bg-accent-dim text-text"
+            : "border-border text-text-muted hover:border-border-strong hover:text-text",
+        )}
+        aria-label={swingCheckOn ? "Hide swing check" : "Swing check"}
+        title="Swing check: tempo, hand path and head movement"
+      >
+        <Gauge className="size-4" />
+      </button>
+
+      <PoseButton
+        status={poseState.status}
+        error={poseState.error}
+        visible={showPose}
+        disabled={!video || Boolean(playbackProblem)}
+        onClick={handlePoseButton}
+      />
+    </>
+  );
+  const frameRateSelect = video ? (
+    <select
+      value={video.fps ?? DEFAULT_FPS}
+      onChange={(event) => onSetVideoFps(video.id, Number(event.target.value), "manual")}
+      className="hidden h-8 border border-border bg-bg px-1.5 font-mono text-xs text-text @3xl:block"
+      aria-label="Clip frame rate"
+      title={
+        video.fpsSource === "detected"
+          ? "Frame rate (detected). Change it if frame stepping skips or repeats frames."
+          : "Frame rate. Set it to the clip's real rate for exact frame stepping."
+      }
+    >
+      {frameRateChoices(video.fps).map((option) => (
+        <option key={option} value={option}>
+          {option} fps
+        </option>
+      ))}
+    </select>
+  ) : null;
+  const speedSelect = (
+    <select
+      value={pane.playbackRate}
+      onChange={(event) => onChangeRate(pane.id, Number(event.target.value))}
+      className="h-8 border border-border bg-bg px-2 font-mono text-xs text-text pointer-coarse:h-10"
+      aria-label="Playback speed"
+    >
+      {SPEED_OPTIONS.map((speed) => (
+        <option key={speed} value={speed}>
+          {speed}x
+        </option>
+      ))}
+    </select>
+  );
+
   return (
     <section
       className={cn(
         // @container: controls adapt to the pane's own width (half the screen when comparing).
-        "@container flex min-h-0 flex-col border transition max-md:flex-none",
+        "@container flex min-h-0 flex-col border transition phone:flex-none",
         // The orange square in the header marks the active pane; the border stays quiet.
         isActive ? "border-border-strong bg-surface-1" : "border-border bg-surface-1",
       )}
       onClick={() => onActivate(pane.id)}
     >
-      <div className="flex min-h-10 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-border bg-surface-1 px-2.5 py-1">
-        <div className="min-w-0 flex-1 basis-40 max-md:flex-none max-md:basis-auto">
+      <div
+        className={cn(
+          "flex min-h-10 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-border bg-surface-1 px-2.5 py-1",
+          // Compact: the videos get the height; the header opens with "More controls".
+          compact && !expanded ? "hidden" : null,
+        )}
+      >
+        <div className="min-w-0 flex-1 basis-40 phone:flex-none phone:basis-auto compact:flex-none compact:basis-auto">
           <div className="flex items-center gap-2">
             <span
               className={cn(
@@ -811,7 +911,7 @@ export function VideoPane({
                 aria-label="Rename video"
               />
             ) : (
-              <p className="truncate text-xs font-medium text-text max-md:hidden">
+              <p className="truncate text-xs font-medium text-text phone:hidden compact:hidden">
                 {getVideoLabel(video?.title)}
               </p>
             )}
@@ -827,7 +927,7 @@ export function VideoPane({
                   setDraftTitle(video?.title ?? "");
                   setIsRenaming(true);
                 }}
-                className="flex size-6 items-center justify-center text-text-muted hover:bg-surface-2 hover:text-text max-md:hidden"
+                className="flex size-6 items-center justify-center text-text-muted hover:bg-surface-2 hover:text-text phone:hidden compact:hidden"
                 title={isRenaming ? "Save name" : "Rename video"}
                 aria-label={isRenaming ? "Save video name" : "Rename video"}
               >
@@ -835,12 +935,18 @@ export function VideoPane({
               </button>
             ) : null}
             {compareMode && isComparisonPane ? (
-              <span className="border border-border px-1.5 py-0.5 text-xs uppercase tracking-caps text-text-muted max-md:hidden">
+              <span className="border border-border px-1.5 py-0.5 text-xs uppercase tracking-caps text-text-muted phone:hidden compact:hidden">
                 Compare
               </span>
             ) : null}
           </div>
-          <p className="mt-0.5 hidden truncate text-xs uppercase tracking-caps text-text-muted @sm:block">
+          <p
+            className={cn(
+              "mt-0.5 hidden truncate text-xs uppercase tracking-caps text-text-muted",
+              // Compact: no room; the clip picker beside it names the clip.
+              compact ? null : "@sm:block",
+            )}
+          >
             {video
               ? `${pane.label} / ${video.clubTag} / ${video.orientation}`
               : isComparisonPane
@@ -849,7 +955,7 @@ export function VideoPane({
           </p>
         </div>
 
-        <div className="flex min-w-fit items-center gap-2 max-md:min-w-0 max-md:flex-1">
+        <div className="flex min-w-fit items-center gap-2 phone:min-w-0 phone:flex-1 compact:min-w-0 compact:flex-1">
           <div className="hidden items-center gap-0.5 rounded-control border border-border bg-bg/25 p-0.5 @sm:flex">
             <button
               type="button"
@@ -940,7 +1046,7 @@ export function VideoPane({
           <select
             value={pane.videoId ?? ""}
             onChange={(event) => onSelectVideo(pane.id, event.target.value)}
-            className="max-w-36 border border-border bg-bg px-2 py-1.5 text-xs text-text @lg:max-w-52 pointer-coarse:h-10 max-md:min-w-0 max-md:max-w-none max-md:flex-1"
+            className="max-w-36 border border-border bg-bg px-2 py-1.5 text-xs text-text @lg:max-w-52 pointer-coarse:h-10 phone:min-w-0 phone:max-w-none phone:flex-1 compact:min-w-0 compact:max-w-none compact:flex-1"
             aria-label="Clip in this pane"
           >
             <option value="">Choose saved swing</option>
@@ -968,7 +1074,7 @@ export function VideoPane({
         <div
           ref={mediaAreaRef}
           className={cn(
-            "flex min-h-0 flex-1 overflow-hidden max-md:flex-none",
+            "flex min-h-0 flex-1 overflow-hidden phone:flex-none",
             swingCheckOn && checksPlacement === "side" ? "flex-row" : "flex-col",
           )}
         >
@@ -976,10 +1082,10 @@ export function VideoPane({
             ref={mediaViewportRef}
             className={cn(
               "relative min-h-[120px] w-full flex-1 overflow-hidden bg-bg",
-              // Phone: a fixed share of the screen (both swings fit when stacked), and a swipe
-              // over the video scrolls the page unless it's zoomed in for panning.
-              compareMode ? "max-md:h-[30dvh] max-md:flex-none" : "max-md:h-[56dvh] max-md:flex-none",
-              phoneLayout && !canPan ? "touch-pan-y" : "touch-none",
+              // Phone: a fixed share of the screen, and a swipe over the video scrolls the page
+              // (unless drawing, or zoomed in for panning).
+              "phone:h-[56dvh] phone:flex-none",
+              layout === "phone" && isZoomPanMode && !canPan ? "touch-pan-y" : "touch-none",
               canPan ? "cursor-grab active:cursor-grabbing" : null,
             )}
             onWheel={handleWheel}
@@ -1154,11 +1260,11 @@ export function VideoPane({
             )}
           </div>
 
-          {swingCheckOn && checksDocked && !phoneLayout ? checksPanel : null}
+          {swingCheckOn && checksDocked && layout !== "phone" ? checksPanel : null}
         </div>
 
-        <div className="flex shrink-0 flex-col border-t border-border bg-surface-1 px-2.5 py-1.5">
-          <div className="flex flex-wrap items-center gap-2 @md:flex-nowrap max-md:justify-between max-md:gap-1.5">
+        <div className="flex shrink-0 flex-col border-t border-border bg-surface-1 px-2.5 py-1.5 compact:px-1.5 compact:py-1">
+          <div className="flex flex-wrap items-center gap-2 @md:flex-nowrap phone:justify-between phone:gap-1.5 compact:flex-nowrap compact:gap-1.5">
             <button
               type="button"
               onClick={togglePlayback}
@@ -1192,47 +1298,7 @@ export function VideoPane({
               <SkipForward className="size-4" />
             </button>
 
-            <button
-              type="button"
-              onClick={toggleLoop}
-              disabled={!video}
-              aria-pressed={Boolean(loop)}
-              className={cn(
-                "flex size-8 shrink-0 items-center justify-center border disabled:opacity-40 pointer-coarse:size-10",
-                loop
-                  ? "border-accent bg-accent-dim text-text"
-                  : "border-border text-text-muted hover:border-border-strong hover:text-text",
-              )}
-              aria-label={loop ? "Stop looping" : "Loop"}
-              title={loop ? "Stop looping (R)" : "Loop a range (R); drag the in/out handles or press [ and ]"}
-            >
-              <Repeat className="size-4" />
-            </button>
-
-            <button
-              type="button"
-              onClick={toggleSwingCheck}
-              disabled={!video || Boolean(playbackProblem)}
-              aria-pressed={swingCheckOn}
-              className={cn(
-                "flex size-8 shrink-0 items-center justify-center border disabled:opacity-40 pointer-coarse:size-10",
-                swingCheckOn
-                  ? "border-accent bg-accent-dim text-text"
-                  : "border-border text-text-muted hover:border-border-strong hover:text-text",
-              )}
-              aria-label={swingCheckOn ? "Hide swing check" : "Swing check"}
-              title="Swing check: tempo, hand path and head movement"
-            >
-              <Gauge className="size-4" />
-            </button>
-
-            <PoseButton
-              status={poseState.status}
-              error={poseState.error}
-              visible={showPose}
-              disabled={!video || Boolean(playbackProblem)}
-              onClick={handlePoseButton}
-            />
+            {compact ? null : extraButtons}
 
             <PlaybackTransport
               timeStore={timeStore}
@@ -1244,44 +1310,40 @@ export function VideoPane({
               onLoopChange={(next) => onUpdatePane(pane.id, { loop: next })}
             />
 
-            {video ? (
-              <select
-                value={video.fps ?? DEFAULT_FPS}
-                onChange={(event) => onSetVideoFps(video.id, Number(event.target.value), "manual")}
-                className="hidden h-8 border border-border bg-bg px-1.5 font-mono text-xs text-text @3xl:block"
-                aria-label="Clip frame rate"
-                title={
-                  video.fpsSource === "detected"
-                    ? "Frame rate (detected). Change it if frame stepping skips or repeats frames."
-                    : "Frame rate. Set it to the clip's real rate for exact frame stepping."
-                }
+            {compact ? null : frameRateSelect}
+            {compact ? null : speedSelect}
+            {compact ? (
+              <button
+                type="button"
+                onClick={() => setExpanded((open) => !open)}
+                aria-expanded={expanded}
+                aria-label={expanded ? "Fewer controls" : "More controls"}
+                title={expanded ? "Fewer controls" : "Clip, zoom, loop, checks, pose, speed and positions"}
+                className={cn(
+                  "flex size-8 shrink-0 items-center justify-center border pointer-coarse:size-10",
+                  expanded
+                    ? "border-accent bg-accent-dim text-text"
+                    : "border-border text-text-muted hover:border-border-strong hover:text-text",
+                )}
               >
-                {frameRateChoices(video.fps).map((option) => (
-                  <option key={option} value={option}>
-                    {option} fps
-                  </option>
-                ))}
-              </select>
+                {expanded ? <ChevronDown className="size-4" /> : <SlidersHorizontal className="size-4" />}
+              </button>
             ) : null}
 
-            <select
-              value={pane.playbackRate}
-              onChange={(event) => onChangeRate(pane.id, Number(event.target.value))}
-              className="h-8 border border-border bg-bg px-2 font-mono text-xs text-text pointer-coarse:h-10"
-              aria-label="Playback speed"
-            >
-              {SPEED_OPTIONS.map((speed) => (
-                <option key={speed} value={speed}>
-                  {speed}x
-                </option>
-              ))}
-            </select>
           </div>
 
-          {/* Phone compare: the shared "Both to" row above the panes does the jumping. */}
-          {video && !playbackProblem && !(phoneLayout && compareMode) ? (
+          {compact && expanded ? (
+            <div className="mt-1.5 flex items-center gap-1.5">
+              {extraButtons}
+              {speedSelect}
+            </div>
+          ) : null}
+
+          {/* Compact compare: the shared "Both to" row under the videos does the jumping; this
+              pane's own chips (for marking) are one tap away under "More controls". */}
+          {video && !playbackProblem && !(compact && compareMode && !expanded) ? (
             <PositionBar
-              className="max-md:order-first max-md:mt-0 max-md:mb-1.5"
+              className="phone:order-first phone:mt-0 phone:mb-1.5"
               timeStore={timeStore}
               fps={video.fps}
               positions={positions}
@@ -1303,7 +1365,7 @@ export function VideoPane({
         </div>
 
         {/* Phone: the page scrolls, so the panel goes after the controls instead of squeezing the video. */}
-        {swingCheckOn && checksDocked && phoneLayout ? checksPanel : null}
+        {swingCheckOn && checksDocked && layout === "phone" ? checksPanel : null}
       </div>
     </section>
   );
@@ -1331,7 +1393,7 @@ function PlaybackTransport({
   return (
     <>
       {/* In a narrow pane the scrubber gets its own row so it stays usable. */}
-      <div className="order-last min-w-0 basis-full px-1 @md:order-none @md:flex-1 @md:basis-0 @md:px-2 max-md:order-first max-md:mb-1">
+      <div className="order-last min-w-0 basis-full px-1 @md:order-none @md:flex-1 @md:basis-0 @md:px-2 phone:order-first phone:mb-1 compact:order-none compact:flex-1 compact:basis-0">
         <Timeline
           currentTime={currentTime}
           duration={duration}

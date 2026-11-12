@@ -2,6 +2,7 @@
 
 import { useRef, type PointerEvent } from "react";
 import { setLoopPoint } from "@/lib/analysis/loop";
+import { layoutPoint, layoutRect } from "@/lib/analysis/screen-rotation";
 import type { LoopRange, SnapshotMarker } from "@/lib/types";
 import { frameDuration } from "@/lib/analysis/frames";
 import { clamp, cn, formatDuration, formatTimecode } from "@/lib/utils";
@@ -28,9 +29,10 @@ export function Timeline({ currentTime, duration, fps, markers, loop, onSeek, on
   const percent = (time: number) => clamp((time / safeDuration) * 100, 0, 100);
   const progress = percent(currentTime);
 
-  const timeAt = (clientX: number) => {
-    const rect = trackRef.current?.getBoundingClientRect();
-    return rect && rect.width ? clamp((clientX - rect.left) / rect.width, 0, 1) * safeDuration : 0;
+  /** Time under the pointer; layout coordinates, so the handles also work in turned phone compare. */
+  const timeAt = (x: number) => {
+    const rect = trackRef.current ? layoutRect(trackRef.current) : null;
+    return rect && rect.width ? clamp((x - rect.left) / rect.width, 0, 1) * safeDuration : 0;
   };
 
   const handleProps = (point: "start" | "end") => ({
@@ -41,7 +43,7 @@ export function Timeline({ currentTime, duration, fps, markers, loop, onSeek, on
     },
     onPointerMove: (event: PointerEvent<HTMLButtonElement>) => {
       if (draggingRef.current === point && loop) {
-        onLoopChange(setLoopPoint(loop, point, timeAt(event.clientX), safeDuration));
+        onLoopChange(setLoopPoint(loop, point, timeAt(layoutPoint(event.clientX, event.clientY).x), safeDuration));
       }
     },
     onPointerUp: () => {

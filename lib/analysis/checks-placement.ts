@@ -9,6 +9,9 @@ export const CHECKS_SIDE_WIDTH = 288;
 /** Below this media width the panel always docks; a floating one would cover most of the pane. */
 export const CHECKS_DOCK_WIDTH = 520;
 
+/** Compact layout (phone landscape / phone compare): the narrower side column (16rem). */
+export const CHECKS_COMPACT_SIDE_WIDTH = 256;
+
 export type ChecksPlacement = "float" | "side" | "below";
 
 /**
@@ -20,10 +23,23 @@ export type ChecksPlacement = "float" | "side" | "below";
  * - "below": under the video (narrow panes).
  *
  * Measured on the whole media area, so docking (which resizes the video area) can't flip it.
+ *
+ * `compact` (a phone on its side): height is what's scarce, so a portrait clip takes the panel
+ * in a narrower column beside it whenever the margins allow, instead of shrinking under it.
  */
-export function checksPanelPlacement(width: number, height: number, aspectRatio: number): ChecksPlacement {
+export function checksPanelPlacement(
+  width: number,
+  height: number,
+  aspectRatio: number,
+  options: { compact?: boolean } = {},
+): ChecksPlacement {
   if (width <= 0 || height <= 0) {
     return "float";
+  }
+
+  if (options.compact) {
+    const margin = width - getContainedStageSize(width, height, aspectRatio).width;
+    return aspectRatio < 1 && margin >= CHECKS_COMPACT_SIDE_WIDTH ? "side" : "below";
   }
 
   if (width < CHECKS_DOCK_WIDTH) {

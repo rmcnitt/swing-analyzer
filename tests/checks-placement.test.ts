@@ -26,6 +26,14 @@ describe("checksPanelPlacement", () => {
     expect(checksPanelPlacement(685, 620, 16 / 9)).toBe("float");
   });
 
+  it("on a phone on its side, docks beside a portrait clip to keep the video's height", () => {
+    // Half of an 844×390 landscape phone in compare: a 9:16 clip is ~138px wide.
+    expect(checksPanelPlacement(416, 245, 9 / 16, { compact: true })).toBe("side");
+    // Too little margin (or a landscape clip): below.
+    expect(checksPanelPlacement(300, 245, 9 / 16, { compact: true })).toBe("below");
+    expect(checksPanelPlacement(416, 245, 16 / 9, { compact: true })).toBe("below");
+  });
+
   it("floats until the pane has been measured", () => {
     expect(checksPanelPlacement(0, 0, 9 / 16)).toBe("float");
   });

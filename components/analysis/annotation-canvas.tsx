@@ -30,6 +30,8 @@ import {
   translateGeometry,
 } from "@/lib/analysis/shape-edit";
 import { cn } from "@/lib/utils";
+import { makeStageRotationAware } from "@/lib/analysis/konva-rotation";
+import { layoutPoint, layoutRect } from "@/lib/analysis/screen-rotation";
 import { color as tokenColor } from "@/lib/design/tokens";
 
 interface AnnotationCanvasProps {
@@ -188,11 +190,8 @@ export function AnnotationCanvas({
       return null;
     }
 
-    return clientToStagePoint(
-      { x: event.clientX, y: event.clientY },
-      node.getBoundingClientRect(),
-      stageSize,
-    );
+    // Layout coordinates, so drawing still lands under the finger when phone compare is turned sideways.
+    return clientToStagePoint(layoutPoint(event.clientX, event.clientY), layoutRect(node), stageSize);
   };
 
   const toStored = (geometry: AnnotationGeometry) =>
@@ -536,7 +535,13 @@ export function AnnotationCanvas({
       )}
     >
       <Stage
-        ref={stageRef}
+        ref={(stage) => {
+          if (stage && stage !== stageRef.current) {
+            makeStageRotationAware(stage);
+          }
+
+          stageRef.current = stage;
+        }}
         width={Math.max(stageSize.width, 1)}
         height={Math.max(stageSize.height, 1)}
         onPointerDown={handlePointerDown}

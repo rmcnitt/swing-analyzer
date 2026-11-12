@@ -16,6 +16,7 @@ import {
   ImageDown,
   Keyboard,
   LibraryBig,
+  Pencil,
 } from "lucide-react";
 import { AnalysisToolbar } from "@/components/analysis/analysis-toolbar";
 import { ComparePositionBar } from "@/components/analysis/compare-position-bar";
@@ -46,7 +47,15 @@ import type {
   VideoAsset,
 } from "@/lib/types";
 import { createId, formatTimecode, uniqueById } from "@/lib/utils";
-import { usePhoneLayout } from "@/lib/use-phone-layout";
+import { cn } from "@/lib/utils";
+import { useMediaQuery } from "@/lib/use-media-query";
+import { lockLandscape, releaseLandscape } from "@/lib/video/screen-orientation";
+import { ROTATED_STYLE, setScreenRotated } from "@/lib/analysis/screen-rotation";
+import {
+  PORTRAIT_QUERY,
+  SMALL_SCREEN_QUERY,
+  workspaceLayout,
+} from "@/lib/analysis/workspace-layout";
 import { composeCaptures, downloadCanvas, exportFileName, type FrameCapture } from "@/lib/video/frame-export";
 import { DEFAULT_FPS, frameIndexAt } from "@/lib/analysis/frames";
 import { DEFAULT_STROKE_WIDTH, STROKE_WIDTHS } from "@/lib/analysis/annotations";
@@ -215,9 +224,12 @@ function WorkspaceView({
   const [activeTool, setActiveTool] = useState<AnnotationTool>(
     () => (loadUiPreference("active-tool") as AnnotationTool | null) ?? "line",
   );
-  // Phone (DESIGN.md): playback, positions and checks only. No drawing tools, so a touch on the
-  // video never draws; existing drawings still show.
-  const isPhone = usePhoneLayout();
+  // Phones: drawing tools stay tucked away until the pencil in the top bar opens them; while
+  // they're closed a touch on the video never draws (existing drawings still show).
+  const smallScreen = useMediaQuery(SMALL_SCREEN_QUERY);
+  const portrait = useMediaQuery(PORTRAIT_QUERY);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const toolsHidden = smallScreen && !toolsOpen;
   const [activeColor, setActiveColor] = useState<HexColor>(
     () => loadUiPreference("active-color") ?? DEFAULT_ANNOTATION_COLOR,
   );
@@ -267,6 +279,15 @@ function WorkspaceView({
     mimeType: string;
   } | null>(null);
   const compareMode = searchParams.get("compare") === "true";
+  const { layout, rotated } = workspaceLayout({ smallScreen, portrait, compareMode });
+
+  // Pointer code maps screen coordinates back into the turned layout while this is on.
+  useEffect(() => {
+    setScreenRotated(rotated);
+    return () => setScreenRotated(false);
+  }, [rotated]);
+
+  useEffect(() => () => releaseLandscape(), []);
   const effectiveActivePaneId = compareMode ? activePaneId : "primary";
 
   // Consume ?ref once so a reload or later navigation doesn't re-apply it.
@@ -857,6 +878,14 @@ function WorkspaceView({
   }, []);
 
   const handleSetCompareMode = (nextCompareMode: boolean) => {
+    // Compare on a phone is always landscape. Android can really turn (fullscreen + lock, from
+    // this tap); elsewhere the workspace draws itself sideways (see workspaceLayout).
+    if (nextCompareMode && smallScreen && portrait) {
+      void lockLandscape();
+    } else if (!nextCompareMode) {
+      releaseLandscape();
+    }
+
     const params = new URLSearchParams(searchParams.toString());
 
     if (nextCompareMode) {
@@ -875,8 +904,16 @@ function WorkspaceView({
 
 
   return (
-    <div className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-bg text-text">
-      <header className="flex h-11 shrink-0 items-center justify-between border-b border-border bg-surface-1 px-2.5">
+    <div
+      data-layout={layout}
+      className={cn(
+        "flex h-dvh flex-col overflow-hidden bg-bg text-text",
+        layout === "desktop" ? "min-h-[480px]" : null,
+        rotated ? "z-40" : null,
+      )}
+      style={rotated ? ROTATED_STYLE : undefined}
+    >
+      <header className="flex h-11 shrink-0 items-center justify-between border-b border-border bg-surface-1 px-2.5 compact:h-9">
         <div className="flex min-w-0 items-center gap-3">
           <Link
             href="/"
@@ -887,7 +924,7 @@ function WorkspaceView({
           </Link>
           <div className="min-w-0">
             <h1 className="truncate text-sm font-semibold text-text">{session.title}</h1>
-            <p className="truncate text-xs uppercase tracking-caps text-text-muted">
+            <p className="truncate text-xs uppercase tracking-caps text-text-muted compact:hidden">
               {session.syncEnabled ? "Sync enabled" : "Independent panes"} / Active{" "}
               {effectiveActivePaneId}
             </p>
@@ -895,6 +932,23 @@ function WorkspaceView({
         </div>
 
         <div className="flex items-center gap-2">
+          {smallScreen ? (
+            <button
+              type="button"
+              onClick={() => setToolsOpen((open) => !open)}
+              aria-pressed={toolsOpen}
+              aria-label={toolsOpen ? "Hide drawing tools" : "Show drawing tools"}
+              title={toolsOpen ? "Hide drawing tools" : "Drawing tools"}
+              className={cn(
+                "flex h-8 items-center border px-2.5",
+                toolsOpen
+                  ? "border-accent bg-accent-dim text-text"
+                  : "border-border text-text-muted hover:border-border-strong hover:text-text",
+              )}
+            >
+              <Pencil className="size-3.5" />
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={handleManualSave}
@@ -963,7 +1017,7 @@ function WorkspaceView({
       ) : null}
 
       <div className="flex min-h-0 flex-1">
-        <div className="w-[52px] shrink-0 pointer-coarse:w-[60px] max-md:hidden">
+        <div className={cn("w-[52px] shrink-0 pointer-coarse:w-[60px]", toolsHidden ? "hidden" : null)}>
           <AnalysisToolbar
             activeTool={activeTool}
             activeColor={activeColor}
@@ -989,7 +1043,7 @@ function WorkspaceView({
           />
         </div>
 
-        <main className="flex min-w-0 flex-1 flex-col p-1.5 max-md:overflow-y-auto">
+        <main className="flex min-w-0 flex-1 flex-col p-1.5 phone:overflow-y-auto compact:p-1">
           {compareMode ? (
             <ComparePositionBar
               syncEnabled={session.syncEnabled}
@@ -1005,12 +1059,13 @@ function WorkspaceView({
           ) : null}
           <div
             className={`grid min-h-0 flex-1 ${
-              // Phone: panes stack at their natural height and the page scrolls.
-              "max-md:flex max-md:flex-none max-md:flex-col"
+              // Phone (one swing, upright): the pane takes its natural height and the page scrolls.
+              // Compact: compare is always side by side; the videos fill the space.
+              "phone:flex phone:flex-none phone:flex-col compact:gap-1"
             } ${
               // Side by side in landscape (desktop, iPad landscape), stacked in portrait.
               compareMode
-                ? "grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-1 landscape:grid-cols-2 landscape:grid-rows-1 md:grid-cols-2 md:grid-rows-1"
+                ? "grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-1 landscape:grid-cols-2 landscape:grid-rows-1 md:grid-cols-2 md:grid-rows-1 compact:grid-cols-2 compact:grid-rows-1"
                 : "grid-cols-1"
             }`}
           >
@@ -1026,8 +1081,8 @@ function WorkspaceView({
                 detectedPositions={detectedPositionKeys(markersByPane[pane.id])}
                 canAutoDetect={Boolean(pane.videoId && detectPositions(pane.videoId))}
                 onAutoPositions={() => handleAutoPositions(pane.id)}
-                activeTool={isPhone ? "zoom-pan" : activeTool}
-                phoneLayout={isPhone}
+                activeTool={toolsHidden ? "zoom-pan" : activeTool}
+                layout={layout}
                 activeColor={activeColor}
                 strokeWidth={strokeWidth}
                 selectedAnnotationId={selectedAnnotationByPane[pane.id] ?? null}

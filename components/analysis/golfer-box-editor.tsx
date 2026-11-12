@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { rectFromPoints } from "@/lib/analysis/framing";
+import { layoutPoint, layoutRect } from "@/lib/analysis/screen-rotation";
 import type { NormalizedRect, Point } from "@/lib/types";
 
 interface GolferBoxEditorProps {
@@ -34,10 +35,12 @@ export function GolferBoxEditor({ initialBox, onCommit, onCancel }: GolferBoxEdi
 
   /** Normalized position in the frame (getBoundingClientRect includes any zoom transform). */
   const toPoint = (event: PointerEvent<HTMLDivElement>): Point => {
-    const rect = event.currentTarget.getBoundingClientRect();
+    // Layout coordinates, so the box follows the finger in turned phone compare too.
+    const rect = layoutRect(event.currentTarget);
+    const point = layoutPoint(event.clientX, event.clientY);
     return {
-      x: (event.clientX - rect.left) / rect.width,
-      y: (event.clientY - rect.top) / rect.height,
+      x: (point.x - rect.left) / rect.width,
+      y: (point.y - rect.top) / rect.height,
     };
   };
 

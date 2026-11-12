@@ -97,7 +97,16 @@ Every icon-only button has an `aria-label` and a tooltip with its shortcut (from
 - **Compare:** two side-by-side panes with identical chrome, matched by swing position, never overlaid. Each pane
   keeps its own timeline (clips differ in tempo); one shared transport and the shared position bar jump both panes
   to the same checkpoint. _Later:_ metric deltas between the two checks panels.
-- **Phone:** playback, positions and the checks panel only. Drawing tools hidden. Compare stacks vertically.
+- **Phone:** the videos are the heroes; everything else is tucked away but one tap from opening.
+  - Upright, one swing: a scrolling column. Video, then chips, scrubber, and the buttons in thumb reach; the
+    checks panel below them.
+  - Compare is always landscape and never stacked. Opening it turns the screen sideways: a real orientation
+    lock where the browser allows it (Android, fullscreen), otherwise the workspace draws itself rotated.
+  - Compact (any phone on its side, and every phone compare): a small desktop. The two videos fill the
+    screen; each pane keeps one row (play, step, scrubber, "More controls") and the shared position chips
+    sit below both. "More controls" opens the clip picker, zoom, loop, checks, pose, speed and that pane's
+    chips. The checks panel docks beside a portrait clip so the video keeps its height.
+  - Drawing tools open from the pencil in the top bar; while closed, a touch on the video never draws.
 
 ## Copy
 - Plain and specific. Sentence case. No exclamation marks.

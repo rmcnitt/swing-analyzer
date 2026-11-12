@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Workspace layouts (lib/analysis/workspace-layout.ts), set as data-layout on the workspace root.
+   Not viewport queries: turned phone compare is landscape while the viewport is still portrait. */
+@custom-variant phone (&:where([data-layout="phone"] *));
+@custom-variant compact (&:where([data-layout="compact"] *));
+
 /* Design tokens: DESIGN.md is the source of truth. Canvas drawing reads the same values
    from lib/design/tokens.ts; keep the two in step. */
 :root {
