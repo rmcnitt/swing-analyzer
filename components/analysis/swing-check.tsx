@@ -129,8 +129,8 @@ interface SwingChecksPanelProps {
 }
 
 const muted = "text-text-muted";
-const good = "text-good";
-const warn = "text-warn";
+/** A unit after a number: one step down the type scale (11px under 13px values), faint. */
+const unitClass = "text-xs text-text-faint";
 
 /**
  * The per-pane "Swing checks" panel: a compact card in the top-left of the video (usually sky or
@@ -252,7 +252,7 @@ export function SwingChecksPanel({
                 className={cn(
                   "h-8 text-xs pointer-coarse:h-9 disabled:opacity-35",
                   current === key
-                    ? "bg-accent font-medium text-bg"
+                    ? "bg-accent-dim font-medium text-accent shadow-[inset_0_0_0_1px_var(--accent)]"
                     : "text-text hover:bg-surface-2 hover:text-text",
                 )}
                 title={at === undefined ? `Mark ${label} first` : `Jump to ${label}`}
@@ -293,7 +293,7 @@ export function SwingChecksPanel({
     <div
       ref={panelRef}
       className={cn(
-        "absolute z-10 w-[min(17rem,calc(100%-1rem))] overflow-hidden rounded-panel border border-border bg-surface-1 text-xs text-text shadow-float",
+        "absolute z-10 w-[min(18rem,calc(100%-1rem))] overflow-hidden rounded-panel border border-border bg-surface-1 text-xs text-text shadow-float",
         CORNER_CLASSES[corner],
         drag ? "opacity-90" : null,
       )}
@@ -354,12 +354,21 @@ export function SwingChecksPanel({
 }
 
 /** Label column, then Address / Top / Impact columns (shared by the jump bar and every row). */
-const GRID = "grid grid-cols-[5.4rem_repeat(3,minmax(0,1fr))]";
+const GRID = "grid grid-cols-[5.25rem_repeat(3,minmax(0,1fr))]";
+
+/** One line of a cell: a number (mono) and its unit (small, faint). Either may be empty. */
+interface CellPart {
+  value: string;
+  unit?: string;
+}
 
 interface Cell {
-  /** Several parts stack onto separate lines (head: down and sideways). */
-  text: string | string[];
-  tone?: "good" | "warn" | "muted";
+  /** Parts stack onto separate lines (head: down and sideways). */
+  parts?: CellPart[];
+  /** In range (`good`) or past its `CHECK_TOLERANCES` limit (`warn`); none for reference values. */
+  status?: "good" | "warn";
+  /** A small key matching the dashed Address mark drawn on the video. */
+  reference?: "ring" | "line";
   title?: string;
 }
 
@@ -370,7 +379,41 @@ type RowContent =
   /** A down-the-line check on a clip filmed from another angle. */
   | { needsDownTheLine: true };
 
-const toneClass = { good, warn, muted } as const;
+const statusClass = { good: "bg-good", warn: "bg-warn" } as const;
+
+function CellView({ cell }: { cell: Cell }) {
+  if (cell.reference) {
+    return (
+      <span
+        aria-label="Address reference"
+        className={cn(
+          "border-text-muted",
+          cell.reference === "ring" ? "size-3 rounded-full border border-dashed" : "h-4 border-l border-dashed",
+        )}
+      />
+    );
+  }
+
+  return (
+    <span className="flex items-center gap-1">
+      <span
+        className={cn("size-1.5 shrink-0 rounded-full", cell.status ? statusClass[cell.status] : null)}
+        aria-label={cell.status === "warn" ? "Worth checking" : cell.status === "good" ? "In range" : undefined}
+      />
+      <span className="flex flex-col items-start">
+        {cell.parts?.map((part, index) => (
+          <span key={index} className="whitespace-nowrap">
+            {part.value ? <span className="font-mono text-sm">{part.value}</span> : null}
+            {part.unit ? (
+              // A word on its own ("steady", "above") is the reading, not a unit: muted, not faint.
+              <span className={part.value ? cn(unitClass, "ml-0.5") : cn("text-xs", muted)}>{part.unit}</span>
+            ) : null}
+          </span>
+        ))}
+      </span>
+    </span>
+  );
+}
 
 function CheckRow({
   label,
@@ -419,15 +462,12 @@ function CheckRow({
           <div
             key={JUMPS[index][1]}
             className={cn(
-              "flex flex-col items-center justify-center whitespace-nowrap px-0.5 py-1 text-center leading-4 tabular-nums",
+              "flex items-center justify-center px-0.5 py-1 leading-4",
               current === JUMPS[index][1] ? "bg-surface-2" : null,
-              cell?.tone ? toneClass[cell.tone] : null,
             )}
             title={cell?.title}
           >
-            {typeof cell?.text === "string"
-              ? cell.text
-              : cell?.text.map((part) => <span key={part}>{part}</span>)}
+            {cell ? <CellView cell={cell} /> : null}
           </div>
         ))
       )}
@@ -436,7 +476,9 @@ function CheckRow({
 }
 
 const DOWN_THE_LINE_TITLE = "Filmed from behind the golfer, looking down the target line.";
-const degrees = (angle?: number) => (angle === undefined ? "—" : `${Math.round(angle)}°`);
+/** "↓1.8" → a value with an inch unit; words like "steady" or "on line" stand alone. */
+const inchPart = (text: string): CellPart => (/\d/.test(text) ? { value: text, unit: "in" } : { value: "", unit: text });
+const degreePart = (angle: number): CellPart => ({ value: String(Math.round(angle)), unit: "°" });
 
 /** Unwraps a down-the-line check, or says why there's nothing to show. */
 function gated<T>(result: ViewGated<T> | null, missing: string, show: (value: T) => RowContent): RowContent {
@@ -476,10 +518,15 @@ function tempoRow(tempo: Tempo | null): RowContent {
   return {
     title: `Backswing ÷ downswing (${tempo.backswing.toFixed(2)}s back, ${tempo.downswing.toFixed(2)}s down). Tour players average about ${TOUR_TEMPO} : 1.`,
     line: (
-      <span>
-        <span className="font-mono text-sm">{tempo.ratio.toFixed(1)} : 1</span>{" "}
-        <span className={muted}>
-          {tempo.backswing.toFixed(2)}s / {tempo.downswing.toFixed(2)}s
+      <span className="flex items-baseline gap-2 whitespace-nowrap">
+        <span>
+          <span className="font-mono text-sm">{tempo.ratio.toFixed(1)}</span>
+          <span className={cn(unitClass, "ml-0.5")}>: 1</span>
+        </span>
+        <span className={cn("font-mono", muted)}>
+          {tempo.backswing.toFixed(2)}
+          <span className={unitClass}>s</span> / {tempo.downswing.toFixed(2)}
+          <span className={unitClass}>s</span>
         </span>
       </span>
     ),
@@ -494,15 +541,15 @@ function headRow(head: HeadMovement | null): RowContent {
   const cell = (label: string, shift: HeadMovement["atTop"]): Cell | null =>
     shift
       ? {
-          text: headShiftArrows(shift, head.screenSign).split(" "),
-          tone: shiftDistance(shift) <= CHECK_TOLERANCES.headInches ? "good" : "warn",
+          parts: headShiftArrows(shift, head.screenSign).split(" ").map(inchPart),
+          status: shiftDistance(shift) <= CHECK_TOLERANCES.headInches ? "good" : "warn",
           title: `Head at ${label}: ${describeHeadShift(shift, head.view)} from Address (approximate inches). Within ${CHECK_TOLERANCES.headInches} in is steady.`,
         }
       : null;
 
   return {
     cells: [
-      { text: "◌", tone: "muted", title: "The dashed circle marks your head at Address." },
+      { reference: "ring", title: "The dashed circle marks your head at Address." },
       cell("Top", head.atTop),
       cell("Impact", head.atImpact),
     ],
@@ -516,14 +563,14 @@ function postureRow(posture: Posture): RowContent {
 
   const cell = (label: string, angle?: number): Cell | null => {
     if (angle === undefined) {
-      return { text: "—", tone: "muted", title: `Torso not clear at ${label}` };
+      return { parts: [{ value: "", unit: "—" }], title: `Torso not clear at ${label}` };
     }
 
     const change = angle - posture.address!;
     const held = Math.abs(change) <= CHECK_TOLERANCES.postureDegrees;
     return {
-      text: degrees(angle),
-      tone: held ? "good" : "warn",
+      parts: [degreePart(angle)],
+      status: held ? "good" : "warn",
       title: held
         ? `Spine angle at ${label}: within ${CHECK_TOLERANCES.postureDegrees}° of Address.`
         : `Spine angle at ${label}: ${change > 0 ? "stood up" : "bent over"} ${Math.abs(Math.round(change))}° from Address.`,
@@ -533,7 +580,7 @@ function postureRow(posture: Posture): RowContent {
   return {
     cells: [
       {
-        text: degrees(posture.address),
+        parts: [degreePart(posture.address)],
         title: "Spine angle above the ground at Address (hip middle to shoulder middle).",
       },
       cell("Top", posture.top),
@@ -553,8 +600,11 @@ function leadArmRow(arm: LeadArm): RowContent {
     cells: [
       null,
       {
-        text: angle === 0 ? "on plane" : `${Math.abs(angle)}° ${angle > 0 ? "above" : "below"}`,
-        tone: onPlane ? "good" : "warn",
+        parts:
+          angle === 0
+            ? [{ value: "", unit: "on plane" }]
+            : [{ value: String(Math.abs(angle)), unit: "°" }, { value: "", unit: angle > 0 ? "above" : "below" }],
+        status: onPlane ? "good" : "warn",
         title: `At the top, the lead (${arm.lead}) arm is ${
           angle === 0 ? "on" : `${Math.abs(angle)}° ${angle > 0 ? "above (steeper than)" : "below (flatter than)"}`
         } the shoulder plane. Within ${CHECK_TOLERANCES.leadArmDegrees}° counts as matching.`,
@@ -580,15 +630,15 @@ function extensionRow(extension: Extension): RowContent {
         ? "on the line"
         : `${Math.abs(inches).toFixed(1)} in ${inches > 0 ? "toward the ball" : "behind the line"}`;
     return {
-      text: extensionArrow(inches, extension.ballSide),
-      tone: ok ? "good" : "warn",
+      parts: [inchPart(extensionArrow(inches, extension.ballSide))],
+      status: ok ? "good" : "warn",
       title: `Butt at ${label}: ${where} (approximate). More than ${CHECK_TOLERANCES.extensionInches} in toward the ball is early extension; on or behind the line is good.`,
     };
   };
 
   return {
     cells: [
-      { text: "line", tone: "muted", title: "The dashed line marks your butt at Address." },
+      { reference: "line", title: "The dashed line marks your butt at Address." },
       cell("Top", extension.atTop),
       cell("Impact", extension.atImpact),
     ],

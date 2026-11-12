@@ -9,16 +9,21 @@ import {
   type CheckGuides,
   type Point2,
 } from "@/lib/pose/swing-check";
+import { color, monoFont, withAlpha } from "@/lib/design/tokens";
 import type { SwingCheckId } from "@/lib/types";
 
+/**
+ * Check overlay colors (DESIGN.md): reference marks (where things were at Address, the shoulder
+ * plane) are dashed and muted; live marks follow the playhead in the accent and turn warn past
+ * their tolerance. A check is identified by its label, never by its own color.
+ */
 export const CHECK_COLORS = {
-  head: "#facc15",
-  posture: "#34d399",
-  extension: "#f472b6",
-  shoulderPlane: "#38bdf8",
-  leadArm: "#ff8a1f",
-  warn: "#fbbf24",
+  reference: color.textMuted,
+  live: color.accent,
+  warn: color.warn,
 } as const;
+
+const liveColor = (withinTolerance: boolean) => (withinTolerance ? CHECK_COLORS.live : CHECK_COLORS.warn);
 
 export type CheckVisibility = Partial<Record<SwingCheckId, boolean>>;
 
@@ -43,7 +48,7 @@ export function drawSwingChecks(
   context.shadowBlur = 3 * scale;
 
   if (visible.head && guides.head) {
-    drawHead(context, track, index, guides.head, width, height, scale);
+    drawHead(context, track, index, guides.head, guides.aspect, width, height, scale);
   }
 
   if (visible.posture && guides.posture) {
@@ -61,12 +66,19 @@ export function drawSwingChecks(
   context.restore();
 }
 
+function dashed(context: CanvasRenderingContext2D, scale: number) {
+  context.strokeStyle = CHECK_COLORS.reference;
+  context.lineWidth = 1.5 * scale;
+  context.setLineDash([6 * scale, 4 * scale]);
+}
+
 /** Dashed ring where the head was at Address, solid ring where it is now, joined when apart. */
 function drawHead(
   context: CanvasRenderingContext2D,
   track: PoseTrack,
   index: number,
-  { origin, radius, source }: NonNullable<CheckGuides["head"]>,
+  { origin, radius, source, tolerance }: NonNullable<CheckGuides["head"]>,
+  aspect: number,
   width: number,
   height: number,
   scale: number,
@@ -75,23 +87,26 @@ function drawHead(
   const ox = origin.x * width;
   const oy = origin.y * height;
 
-  context.strokeStyle = CHECK_COLORS.head;
-  context.lineWidth = 2 * scale;
-  context.setLineDash([6 * scale, 4 * scale]);
+  context.save();
+  dashed(context, scale);
   context.beginPath();
   context.arc(ox, oy, r, 0, Math.PI * 2);
   context.stroke();
   context.setLineDash([]);
 
   if (!hasPose(track, index)) {
+    context.restore();
     return;
   }
 
   const now = headAt(track, index, source);
   const nx = now.x * width;
   const ny = now.y * height;
+  const moved = Math.hypot((now.x - origin.x) * aspect, now.y - origin.y);
+  const tone = liveColor(tolerance === undefined || moved <= tolerance);
 
-  context.lineWidth = 2.5 * scale;
+  context.strokeStyle = tone;
+  context.lineWidth = 2 * scale;
   context.beginPath();
   context.arc(nx, ny, r, 0, Math.PI * 2);
   context.stroke();
@@ -104,15 +119,17 @@ function drawHead(
     context.stroke();
   }
 
-  context.fillStyle = CHECK_COLORS.head;
-  for (const [x, y] of [
-    [ox, oy],
-    [nx, ny],
-  ]) {
+  for (const [x, y, fill] of [
+    [ox, oy, CHECK_COLORS.reference],
+    [nx, ny, tone],
+  ] as const) {
+    context.fillStyle = fill;
     context.beginPath();
     context.arc(x, y, 2.5 * scale, 0, Math.PI * 2);
     context.fill();
   }
+
+  context.restore();
 }
 
 /** Point `t` of the way from `a` to `b` (beyond `b` when t > 1), in pixels. */
@@ -120,16 +137,43 @@ function along(a: Point2, b: Point2, t: number, width: number, height: number): 
   return [(a.x + (b.x - a.x) * t) * width, (a.y + (b.y - a.y) * t) * height];
 }
 
-function label(context: CanvasRenderingContext2D, text: string, x: number, y: number, color: string, scale: number) {
-  context.font = `600 ${12 * scale}px ui-sans-serif, system-ui, sans-serif`;
+const LABEL_SIZE = 12;
+
+/**
+ * On-video label: mono `--text` on a `--bg` 70% pill. `x` is the left edge, or the right edge when
+ * `align` is "right"; `y` is the vertical middle.
+ */
+function label(
+  context: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  scale: number,
+  align: "left" | "right" = "left",
+) {
+  context.save();
+  context.font = monoFont(LABEL_SIZE * scale);
   context.textBaseline = "middle";
-  const padding = 3 * scale;
-  const textWidth = context.measureText(text).width;
+  context.textAlign = "left";
   context.shadowBlur = 0;
-  context.fillStyle = "rgba(0,0,0,0.7)";
-  context.fillRect(x - padding, y - 8 * scale, textWidth + padding * 2, 16 * scale);
-  context.fillStyle = color;
-  context.fillText(text, x, y);
+
+  const padX = 6 * scale;
+  const pillHeight = 20 * scale;
+  const pillWidth = context.measureText(text).width + padX * 2;
+  const left = align === "right" ? x - pillWidth : x;
+
+  context.fillStyle = withAlpha(color.bg, 0.7);
+  context.beginPath();
+  if (typeof context.roundRect === "function") {
+    context.roundRect(left, y - pillHeight / 2, pillWidth, pillHeight, pillHeight / 2);
+  } else {
+    context.rect(left, y - pillHeight / 2, pillWidth, pillHeight);
+  }
+  context.fill();
+
+  context.fillStyle = color.text;
+  context.fillText(text, left + padX, y);
+  context.restore();
 }
 
 /** Dashed line along the Address spine, solid line along the current spine with its angle. */
@@ -137,16 +181,14 @@ function drawPosture(
   context: CanvasRenderingContext2D,
   track: PoseTrack,
   index: number,
-  { hips, shoulders }: NonNullable<CheckGuides["posture"]>,
+  { hips, shoulders, angle: addressAngle }: NonNullable<CheckGuides["posture"]>,
   aspect: number,
   width: number,
   height: number,
   scale: number,
 ) {
   context.save();
-  context.strokeStyle = CHECK_COLORS.posture;
-  context.lineWidth = 2 * scale;
-  context.setLineDash([7 * scale, 5 * scale]);
+  dashed(context, scale);
   context.beginPath();
   context.moveTo(...along(hips, shoulders, -0.15, width, height));
   context.lineTo(...along(hips, shoulders, 1.35, width, height));
@@ -158,7 +200,8 @@ function drawPosture(
   if (angle !== undefined) {
     const nowHips = midpoint(track, index, LM.leftHip, LM.rightHip);
     const nowShoulders = midpoint(track, index, LM.leftShoulder, LM.rightShoulder);
-    context.lineWidth = 3 * scale;
+    context.strokeStyle = liveColor(Math.abs(angle - addressAngle) <= CHECK_TOLERANCES.postureDegrees);
+    context.lineWidth = 2.5 * scale;
     context.beginPath();
     context.moveTo(...along(nowHips, nowShoulders, 0, width, height));
     context.lineTo(...along(nowHips, nowShoulders, 1, width, height));
@@ -167,10 +210,8 @@ function drawPosture(
     // Label off the middle of the back (the side away from the lean), over the background.
     const [hx, hy] = along(nowHips, nowShoulders, 0.5, width, height);
     const leansRight = nowShoulders.x > nowHips.x;
-    const text = `${Math.round(angle)}°`;
-    context.font = `600 ${12 * scale}px ui-sans-serif, system-ui, sans-serif`;
-    const textWidth = context.measureText(text).width;
-    label(context, text, leansRight ? hx - 26 * scale - textWidth : hx + 26 * scale, hy, CHECK_COLORS.posture, scale);
+    const gap = 26 * scale;
+    label(context, `${Math.round(angle)}°`, leansRight ? hx - gap : hx + gap, hy, scale, leansRight ? "right" : "left");
   }
 
   context.restore();
@@ -178,7 +219,7 @@ function drawPosture(
 
 /**
  * The wall: a dashed vertical line at the butt at Address, and the butt now (a dot at hip height).
- * When the butt has come off the wall toward the ball, the gap is drawn, amber past tolerance.
+ * When the butt has come off the wall toward the ball, the gap is drawn, warn past tolerance.
  */
 function drawExtension(
   context: CanvasRenderingContext2D,
@@ -190,9 +231,7 @@ function drawExtension(
   scale: number,
 ) {
   context.save();
-  context.strokeStyle = CHECK_COLORS.extension;
-  context.lineWidth = 2 * scale;
-  context.setLineDash([7 * scale, 5 * scale]);
+  dashed(context, scale);
   context.beginPath();
   context.moveTo(wallX * width, top * height);
   context.lineTo(wallX * width, bottom * height);
@@ -207,21 +246,21 @@ function drawExtension(
     const hips = midpoint(track, index, LM.leftHip, LM.rightHip);
     const buttX = hips.x - ballSide * buttOffset;
     const off = (buttX - wallX) * ballSide;
-    const color = off > tolerance ? CHECK_COLORS.warn : CHECK_COLORS.extension;
+    const tone = liveColor(off <= tolerance);
     const y = hips.y * height;
 
     if (off > 0.002) {
-      context.strokeStyle = color;
-      context.lineWidth = 3 * scale;
+      context.strokeStyle = tone;
+      context.lineWidth = 2.5 * scale;
       context.beginPath();
       context.moveTo(wallX * width, y);
       context.lineTo(buttX * width, y);
       context.stroke();
     }
 
-    context.fillStyle = color;
-    context.strokeStyle = "#0b0c0e";
-    context.lineWidth = 1.5 * scale;
+    context.fillStyle = tone;
+    context.strokeStyle = color.bg;
+    context.lineWidth = 1 * scale;
     context.beginPath();
     context.arc(buttX * width, y, 5 * scale, 0, Math.PI * 2);
     context.fill();
@@ -235,8 +274,8 @@ function drawExtension(
 const LEAD_ARM_WINDOW = 2;
 
 /**
- * Around the top: the shoulder plane (a line through both shoulders, extended) and the lead arm
- * (lead shoulder to wrist), with the angle between them.
+ * Around the top: the shoulder plane (a dashed reference through both shoulders, extended) and the
+ * lead arm (lead shoulder to wrist, live), with the angle between them.
  */
 function drawLeadArm(
   context: CanvasRenderingContext2D,
@@ -265,24 +304,22 @@ function drawLeadArm(
 
   context.save();
   // Shoulder plane: from below the lead shoulder, through the trail shoulder and well beyond.
-  context.strokeStyle = CHECK_COLORS.shoulderPlane;
-  context.lineWidth = 2 * scale;
-  context.setLineDash([7 * scale, 5 * scale]);
+  dashed(context, scale);
   context.beginPath();
   context.moveTo(...along(s, t, -0.8, width, height));
   context.lineTo(...along(s, t, 4, width, height));
   context.stroke();
   context.setLineDash([]);
 
-  context.strokeStyle = CHECK_COLORS.leadArm;
-  context.lineWidth = 3 * scale;
+  context.strokeStyle = liveColor(Math.abs(angle) <= CHECK_TOLERANCES.leadArmDegrees);
+  context.lineWidth = 2.5 * scale;
   context.beginPath();
   context.moveTo(...along(s, w, 0, width, height));
   context.lineTo(...along(s, w, 1.25, width, height));
   context.stroke();
 
-  const tone = Math.abs(angle) <= CHECK_TOLERANCES.leadArmDegrees ? CHECK_COLORS.leadArm : CHECK_COLORS.warn;
   const [lx, ly] = along(s, w, 1.3, width, height);
-  label(context, `${Math.abs(Math.round(angle))}° ${angle >= 0 ? "above" : "below"}`, lx + 6 * scale, ly, tone, scale);
+  const rounded = Math.abs(Math.round(angle));
+  label(context, rounded === 0 ? "on plane" : `${rounded}° ${angle >= 0 ? "above" : "below"}`, lx + 6 * scale, ly, scale);
   context.restore();
 }

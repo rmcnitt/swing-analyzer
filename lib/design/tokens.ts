@@ -25,3 +25,25 @@ export const color = {
 export const ANNOTATION_SWATCHES = [color.accent, "#38bdf8", "#facc15", "#4ade80", "#f472b6"] as const;
 
 export const DEFAULT_ANNOTATION_COLOR = color.accent;
+
+/** `rgba()` form of a 6-digit token hex, for canvas fills that need transparency. */
+export function withAlpha(hex: string, alpha: number) {
+  const value = Number.parseInt(hex.slice(1), 16);
+  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
+}
+
+const MONO_FALLBACK = "ui-monospace, SFMono-Regular, Menlo, monospace";
+
+/**
+ * Canvas font string in the UI mono face (IBM Plex Mono, loaded by next/font under a generated
+ * family name exposed as `--font-plex-mono`). Falls back to the system mono outside the browser.
+ */
+export function monoFont(sizePx: number, weight = 500) {
+  let family = "";
+
+  if (typeof document !== "undefined") {
+    family = getComputedStyle(document.documentElement).getPropertyValue("--font-plex-mono").trim();
+  }
+
+  return `${weight} ${sizePx}px ${family ? `${family}, ` : ""}${MONO_FALLBACK}`;
+}

@@ -547,10 +547,13 @@ export interface Point2 {
 export interface CheckGuides {
   /** The clip's width / height, so live measurements match the panel's. */
   aspect: number;
-  /** Address head position (normalized) and a ring radius in frame-height units. */
-  head?: { source: HeadSource; origin: Point2; radius: number };
-  /** Address spine, hip middle to shoulder middle (normalized); down-the-line only. */
-  posture?: { hips: Point2; shoulders: Point2 };
+  /**
+   * Address head position (normalized) and a ring radius in frame-height units. `tolerance` is the
+   * head tolerance in frame-height units (x scaled by `aspect`); absent when there's no ruler.
+   */
+  head?: { source: HeadSource; origin: Point2; radius: number; tolerance?: number };
+  /** Address spine, hip middle to shoulder middle (normalized), and its angle; down-the-line only. */
+  posture?: { hips: Point2; shoulders: Point2; angle: number };
   /**
    * The "wall": a vertical line at the butt at Address (normalized x, from `top` to `bottom`).
    * The live butt is the hip middle pushed `buttOffset` away from the ball (`ballSide`, ±1);
@@ -579,8 +582,14 @@ export function buildCheckGuides(
   const source = headSource(track, address, headEnd);
   // About the head's half-height (~4.5 in against ~33 in of leg). Leg length is a steadier ruler
   // than the face, which tilts down at address.
-  const radius = Math.max(0.01, legLength(track, start, aspect) * 0.13);
+  const legs = legLength(track, start, aspect);
+  const radius = Math.max(0.01, legs * 0.13);
+  const scale = inchesPerUnit(track, start, aspect, heightInches);
   guides.head = { source, origin: headAt(track, start, source), radius };
+
+  if (scale > 0) {
+    guides.head.tolerance = CHECK_TOLERANCES.headInches / scale;
+  }
 
   if (detectCameraView(track, start, aspect) !== "down-the-line") {
     return guides;
@@ -588,8 +597,10 @@ export function buildCheckGuides(
 
   const hips = midpoint(track, start, LM.leftHip, LM.rightHip);
 
-  if (spineAngle(track, start, aspect) !== undefined) {
-    guides.posture = { hips, shoulders: midpoint(track, start, LM.leftShoulder, LM.rightShoulder) };
+  const spine = spineAngle(track, start, aspect);
+
+  if (spine !== undefined) {
+    guides.posture = { hips, shoulders: midpoint(track, start, LM.leftShoulder, LM.rightShoulder), angle: spine };
   }
 
   const topIndex = top === undefined ? -1 : frameIndexNear(track, top);
@@ -597,9 +608,6 @@ export function buildCheckGuides(
   if (topIndex >= 0) {
     guides.leadArm = { topIndex, lead: leadSide(track, start), ballSide: ballSide(track, start) };
   }
-
-  const legs = legLength(track, start, aspect);
-  const scale = inchesPerUnit(track, start, aspect, heightInches);
 
   if (allVisible(track, start, HIPS) && legs > 0 && scale > 0) {
     const side = ballSide(track, start);
