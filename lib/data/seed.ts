@@ -129,6 +129,10 @@ export const sampleSessions: AnalysisSession[] = [
       swingCheck: true,
       fitGolfer: true,
       checks: { tempo: true, head: true, posture: true, extension: true, leadArm: true },
+      // Repeats the swing (Address to Finish, as the Loop button would), opening at Address.
+      loopEnabled: true,
+      loop: { start: 1.0, end: 3.0 },
+      currentTime: 1.0,
     }),
     annotations: { primary: [], secondary: [] },
     snapshotMarkers: positionMarkers("sample-session-dtl", "primary", "sample-video-down-the-line", {
