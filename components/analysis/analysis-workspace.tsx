@@ -16,7 +16,6 @@ import {
   ImageDown,
   Keyboard,
   LibraryBig,
-  Save,
 } from "lucide-react";
 import { AnalysisToolbar } from "@/components/analysis/analysis-toolbar";
 import { ComparePositionBar } from "@/components/analysis/compare-position-bar";
@@ -892,14 +891,19 @@ function WorkspaceView({
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="hidden font-mono text-xs text-text-muted sm:inline">
+          <button
+            type="button"
+            onClick={handleManualSave}
+            className="hidden h-8 items-center px-1.5 font-mono text-xs text-text-muted hover:text-text sm:flex"
+            title="Changes save automatically. Click to save now."
+          >
             {lastSavedAt
               ? `Saved ${new Date(lastSavedAt).toLocaleTimeString([], {
                   hour: "numeric",
                   minute: "2-digit",
                 })}`
-              : "Autosave"}
-          </span>
+              : "Autosave on"}
+          </button>
           <button
             type="button"
             onClick={() => handleSetCompareMode(!compareMode)}
@@ -919,14 +923,6 @@ function WorkspaceView({
             <LibraryBig className="size-3.5" />
             <span className="hidden sm:inline">Library</span>
           </Link>
-          <button
-            type="button"
-            onClick={handleManualSave}
-            className="flex h-8 items-center gap-2 bg-accent px-2.5 text-xs font-semibold text-bg"
-          >
-            <Save className="size-3.5" />
-            <span className="hidden sm:inline">Save</span>
-          </button>
           <button
             type="button"
             onClick={() => void handleExportFrame()}

@@ -94,11 +94,11 @@ export function ComparePositionBar({
                       : `Mark ${label} in a swing first`
                 }
                 className={cn(
-                  "h-7 shrink-0 border px-2 text-xs pointer-coarse:h-9",
+                  "h-7 shrink-0 border px-2 font-mono text-xs pointer-coarse:h-9",
                   matched
-                    ? "border-border-strong text-text hover:border-accent hover:bg-accent-dim"
-                    : "border-dashed border-border text-text-muted hover:text-text",
-                  "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-text-muted",
+                    ? "border-border-strong text-text hover:border-text-muted"
+                    : "border-text-faint/60 text-text-muted hover:border-text-muted hover:text-text",
+                  "disabled:cursor-not-allowed disabled:border-border disabled:text-text-faint",
                 )}
               >
                 {label}

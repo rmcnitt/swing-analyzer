@@ -25,6 +25,7 @@ import {
   SkipBack,
   SkipForward,
   UploadCloud,
+  X,
 } from "lucide-react";
 import { AnnotationCanvas } from "@/components/analysis/annotation-canvas";
 import { PositionBar } from "@/components/analysis/position-bar";
@@ -45,6 +46,7 @@ import { PlaybackProblemNotice } from "@/components/analysis/playback-problem-no
 import { getContainedStageSize, getVideoAspectRatio } from "@/lib/video-layout";
 import { checksPanelPlacement } from "@/lib/analysis/checks-placement";
 import { customMarkers, nextCustomLabel } from "@/lib/analysis/positions";
+import { analysisProgressText } from "@/lib/pose/analysis-progress";
 import { clampPan, fitFraming, MAX_ZOOM, MIN_ZOOM } from "@/lib/analysis/framing";
 import { defaultLoop } from "@/lib/analysis/loop";
 import { GolferBoxEditor } from "@/components/analysis/golfer-box-editor";
@@ -756,6 +758,8 @@ export function VideoPane({
       frameTolerance={frameDuration(video?.fps) / 2}
       height={golferHeight}
       corner={pane.checksCorner ?? "top-left"}
+      duration={duration}
+      fps={video?.fps}
       onMoveCorner={(corner) => onUpdatePane(pane.id, { checksCorner: corner })}
       onToggleCheck={toggleCheck}
       onJump={(label) => onJumpToPosition(pane.id, label)}
@@ -770,9 +774,8 @@ export function VideoPane({
       className={cn(
         // @container: controls adapt to the pane's own width (half the screen when comparing).
         "@container flex min-h-0 flex-col border transition",
-        isActive
-          ? "border-accent bg-surface-1"
-          : "border-border bg-surface-1",
+        // The orange square in the header marks the active pane; the border stays quiet.
+        isActive ? "border-border-strong bg-surface-1" : "border-border bg-surface-1",
       )}
       onClick={() => onActivate(pane.id)}
     >
@@ -1087,6 +1090,15 @@ export function VideoPane({
                     overlayRendererRef={overlayRendererRef}
                   />
 
+                  {poseState.status === "analyzing" ? (
+                    // Scan line: where analysis has got to, top to bottom of the frame.
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute inset-x-0 h-px bg-accent"
+                      style={{ top: `${poseState.progress * 100}%` }}
+                    />
+                  ) : null}
+
                   {boxMode ? (
                     <GolferBoxEditor
                       initialBox={golferBox}
@@ -1101,6 +1113,15 @@ export function VideoPane({
                 </div>
 
                 {swingCheckOn && !checksDocked ? checksPanel : null}
+
+                {poseState.status === "analyzing" ? (
+                  <p
+                    role="status"
+                    className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-bg/70 px-2.5 py-1 font-mono text-xs text-text"
+                  >
+                    {analysisProgressText(poseState.progress, duration, video.fps)}
+                  </p>
+                ) : null}
 
                 {selectedAnnotation && isActive && activeTool === "select" && pane.overlayVisible ? (
                   <ShapeLabelEditor
@@ -1134,7 +1155,13 @@ export function VideoPane({
             <button
               type="button"
               onClick={togglePlayback}
-              className="flex size-8 shrink-0 items-center justify-center bg-accent text-bg pointer-coarse:size-10"
+              className={cn(
+                "flex size-8 shrink-0 items-center justify-center border pointer-coarse:size-10",
+                // One primary per view: only the active pane's Play is filled.
+                isActive
+                  ? "border-accent bg-accent text-bg"
+                  : "border-border text-text hover:border-border-strong",
+              )}
               aria-label={isPlaying ? "Pause" : "Play"}
             >
               {isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
@@ -1194,7 +1221,6 @@ export function VideoPane({
 
             <PoseButton
               status={poseState.status}
-              progress={poseState.progress}
               error={poseState.error}
               visible={showPose}
               disabled={!video || Boolean(playbackProblem)}
@@ -1294,19 +1320,10 @@ function PlaybackTransport({
     <>
       {/* In a narrow pane the scrubber gets its own row so it stays usable. */}
       <div className="order-last min-w-0 basis-full px-1 @md:order-none @md:flex-1 @md:basis-0 @md:px-2">
-        <input
-          type="range"
-          min={0}
-          max={duration || 0}
-          step={frameDuration(fps)}
-          value={Math.min(currentTime, duration || 0)}
-          onChange={(event) => onSeek(Number(event.target.value))}
-          className="h-1.5 w-full cursor-pointer appearance-none bg-border-strong accent-accent"
-          aria-label="Scrub video"
-        />
         <Timeline
           currentTime={currentTime}
           duration={duration}
+          fps={fps}
           markers={markers}
           loop={loop}
           onSeek={onSeek}
@@ -1324,14 +1341,12 @@ function PlaybackTransport({
 
 function PoseButton({
   status,
-  progress,
   error,
   visible,
   disabled,
   onClick,
 }: {
   status: PoseState["status"];
-  progress: number;
   error?: string;
   visible: boolean;
   disabled: boolean;
@@ -1366,8 +1381,8 @@ function PoseButton({
             : "border-border text-text-muted hover:border-border-strong hover:text-text",
       )}
     >
-      <PersonStanding className="size-4" />
-      {analyzing ? <span className="w-8 text-right">{Math.round(progress * 100)}%</span> : null}
+      {/* Progress shows on the video (scan line + frame count); here it's just the way to stop. */}
+      {analyzing ? <X className="size-4" /> : <PersonStanding className="size-4" />}
     </button>
   );
 }

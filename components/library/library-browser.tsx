@@ -223,7 +223,7 @@ function SessionTable({
                 </Link>
                 <Link
                   href={`/analysis/${session.id}?compare=true`}
-                  className="flex h-8 items-center gap-1.5 bg-accent px-2.5 text-xs font-semibold text-bg"
+                  className="flex h-8 items-center gap-1.5 border border-border px-2.5 text-xs text-text hover:border-border-strong"
                 >
                   <Columns2 className="size-3.5" />
                   Compare
@@ -291,7 +291,7 @@ function ReferenceTable({
           <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
             <Link
               href={`/analysis/${compareSessionId}?compare=true&ref=${encodeURIComponent(video.id)}`}
-              className="flex h-8 items-center gap-1.5 bg-accent px-2.5 text-xs font-semibold text-bg"
+              className="flex h-8 items-center gap-1.5 border border-border px-2.5 text-xs text-text hover:border-border-strong"
             >
               <Columns2 className="size-3.5" />
               Add to compare

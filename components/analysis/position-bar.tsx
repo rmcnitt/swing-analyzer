@@ -33,7 +33,14 @@ interface PositionBarProps {
   onDeleteCustom: (markerId: string) => void;
 }
 
-const chip = "h-7 shrink-0 border px-2 text-xs pointer-coarse:h-9";
+/** Position chips (DESIGN.md): 28px, mono; unmarked faint outline, marked text, current accent. */
+const chip = "h-7 shrink-0 border px-2 font-mono text-xs pointer-coarse:h-9";
+const chipState = (state: "unmarked" | "marked" | "current") =>
+  state === "current"
+    ? "border-accent bg-accent-dim text-text"
+    : state === "marked"
+      ? "border-border-strong text-text hover:border-text-muted"
+      : "border-text-faint/60 text-text-muted hover:border-text-muted hover:text-text";
 const iconButton =
   "flex h-7 w-6 shrink-0 items-center justify-center border text-text-muted hover:text-text pointer-coarse:h-9 pointer-coarse:w-8";
 
@@ -105,16 +112,9 @@ export function PositionBar({
                 editing && isSet ? "border-r-0" : null,
                 editing
                   ? "border-dashed border-accent text-text hover:bg-accent-dim"
-                  : here
-                    ? "border-accent bg-accent-dim text-text"
-                    : isSet
-                      ? "border-border-strong text-text hover:border-accent"
-                      : "border-dashed border-border text-text-muted hover:border-border-strong hover:text-text",
+                  : chipState(here ? "current" : isSet ? "marked" : "unmarked"),
               )}
             >
-              {isDetected ? (
-                <WandSparkles className="mr-1 inline size-3 align-[-2px] text-accent" aria-label="detected" />
-              ) : null}
               {label}
             </button>
             {editing && isSet ? (
@@ -184,12 +184,7 @@ export function PositionBar({
             type="button"
             onClick={() => onSeekCustom(marker)}
             title={`Jump to ${marker.label} (${formatTimecode(marker.time)})`}
-            className={cn(
-              chip,
-              isHere(marker.time)
-                ? "border-accent bg-accent-dim text-text"
-                : "border-border-strong text-text hover:border-accent",
-            )}
+            className={cn(chip, chipState(isHere(marker.time) ? "current" : "marked"))}
           >
             {marker.label}
           </button>
@@ -228,7 +223,7 @@ export function PositionBar({
           title="Add a named marker at this frame"
           className={cn(
             chip,
-            "flex items-center gap-1 border-dashed border-border px-1.5 text-text-muted hover:border-border-strong hover:text-text",
+            "flex items-center gap-1 border-dashed border-border px-1.5 font-sans text-text-muted hover:border-border-strong hover:text-text",
           )}
         >
           <Plus className="size-3.5" />

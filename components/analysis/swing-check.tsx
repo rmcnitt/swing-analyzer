@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Check, ChevronDown, ChevronUp, Gauge, GripHorizontal, Pencil, X } from "lucide-react";
 import { drawSwingChecks, type CheckVisibility } from "@/lib/pose/draw-checks";
+import { analysisProgressText } from "@/lib/pose/analysis-progress";
 import { frameIndexNear, type PoseTrack } from "@/lib/pose/landmarks";
 import type { PoseState } from "@/lib/pose/pose-store";
 import {
@@ -120,6 +121,9 @@ interface SwingChecksPanelProps {
   frameTolerance: number;
   height: GolferHeight;
   corner: PanelCorner;
+  /** Clip length and frame rate, for "Analyzing frame 84 / 150". */
+  duration?: number;
+  fps?: number;
   /** Docked beside or below the video (where floating would cover the golfer) instead of floating. */
   docked?: "side" | "below";
   onMoveCorner: (corner: PanelCorner) => void;
@@ -148,6 +152,8 @@ export function SwingChecksPanel({
   frameTolerance,
   height,
   corner,
+  duration,
+  fps,
   docked,
   onMoveCorner,
   onToggleCheck,
@@ -194,12 +200,9 @@ export function SwingChecksPanel({
 
   if (pose.status === "analyzing") {
     body = (
-      <div className="flex items-center gap-2 px-2.5 py-2">
-        <span className={muted}>Analyzing swing… {Math.round(pose.progress * 100)}%</span>
-        <div className="h-1 flex-1 bg-border">
-          <div className="h-full bg-accent" style={{ width: `${pose.progress * 100}%` }} />
-        </div>
-      </div>
+      <p className={cn("px-2.5 py-2 font-mono", muted)}>
+        {analysisProgressText(pose.progress, duration, fps)}
+      </p>
     );
   } else if (pose.status === "unknown" || pose.status === "checking") {
     body = <p className={cn("px-2.5 py-2", muted)}>Loading…</p>;
@@ -335,7 +338,7 @@ export function SwingChecksPanel({
         onPointerUp={endDrag}
         onPointerCancel={() => setDrag(null)}
       >
-        <Gauge className="size-3.5 shrink-0 text-accent" aria-hidden />
+        <Gauge className={cn("size-3.5 shrink-0", muted)} aria-hidden />
         <span className="select-none text-xs font-medium uppercase tracking-caps">Swing checks</span>
         {docked ? null : <GripHorizontal className={cn("size-3.5", muted)} aria-hidden />}
         <button
