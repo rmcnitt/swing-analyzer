@@ -14,6 +14,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // MediaPipe runtime copied from node_modules (scripts/copy-mediapipe-wasm.mjs).
     "public/mediapipe/**",
+    // Local AI tooling state (gitignored).
+    ".agents/**",
+    ".impeccable/**",
   ]),
 ]);
 
