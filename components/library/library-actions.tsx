@@ -107,7 +107,7 @@ export function ConfirmDeleteButton({
   }
 
   return (
-    <div className="flex items-center gap-1.5" role="group" aria-label={`Confirm deleting ${label}`}>
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={`Confirm deleting ${label}`}>
       <span className="max-w-48 text-xs leading-tight text-text-muted">
         {consequence}
       </span>
@@ -166,11 +166,10 @@ export function StorageMeter({ version }: { version: number }) {
       </span>
       <span className="h-1 w-16 overflow-hidden bg-border">
         <span
-          className="block h-full bg-accent"
+          className="block h-full bg-text-muted"
           style={{ width: `${Math.max(percent, 1)}%` }}
         />
       </span>
-      {status.persisted ? null : <span className="hidden sm:inline">(not persistent)</span>}
     </div>
   );
 }

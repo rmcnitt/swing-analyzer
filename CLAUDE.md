@@ -19,7 +19,10 @@ Next.js 16 App Router, React 19, TypeScript, Tailwind v4, react-konva (drawing),
 - Run lint + typecheck + test before committing.
 
 ## Code map
-- `app/` thin route files; `/` hub, `/library`, `/analysis/[sessionId]` (`?compare=true` for two panes).
+- `app/` thin route files; `/` landing (`components/dashboard/swing-hub.tsx`: hero, upload/import setup, screenshots in
+  `public/landing/`), `/library` (thumbnail grid), `/analysis/[sessionId]` (`?compare=true` for two panes).
+- `components/landing/hero-swing.tsx`: the sample clip looping with real pose/check overlays, from the recorded track
+  `public/samples/sample-face-on.pose.json` (a copy of the face-on test fixture; `lib/pose/pose-recording.ts` loads both).
 - `components/analysis/` workspace: `analysis-workspace.tsx` (session state), `video-pane.tsx` (playback, sync,
   zoom), `annotation-canvas.tsx` (Konva shapes), `analysis-toolbar.tsx`, `notes-popover.tsx`, `timeline.tsx`.
   `position-bar.tsx` (marker row: positions + custom markers, edit mode) / `compare-position-bar.tsx` (jump both), `golfer-box-editor.tsx` (fit framing).

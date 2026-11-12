@@ -818,7 +818,7 @@ export function VideoPane({
             : "border-border text-text-muted hover:border-border-strong hover:text-text",
         )}
         aria-label={swingCheckOn ? "Hide swing check" : "Swing check"}
-        title="Swing check: tempo, hand path and head movement"
+        title="Swing checks: tempo, head, posture, early extension and lead arm"
       >
         <Gauge className="size-4" />
       </button>

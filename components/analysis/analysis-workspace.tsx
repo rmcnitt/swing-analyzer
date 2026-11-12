@@ -19,6 +19,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { AnalysisToolbar } from "@/components/analysis/analysis-toolbar";
+import { BrandMark } from "@/components/site/brand-mark";
 import { ComparePositionBar } from "@/components/analysis/compare-position-bar";
 import { PlaybackProblemNotice } from "@/components/analysis/playback-problem-notice";
 import { NotesPopover } from "@/components/analysis/notes-popover";
@@ -915,19 +916,9 @@ function WorkspaceView({
     >
       <header className="flex h-11 shrink-0 items-center justify-between border-b border-border bg-surface-1 px-2.5 compact:h-9">
         <div className="flex min-w-0 items-center gap-3">
-          <Link
-            href="/"
-            className="flex size-8 shrink-0 items-center justify-center bg-accent text-bg"
-            aria-label="Home"
-          >
-            <span className="text-sm font-semibold">SA</span>
-          </Link>
+          <BrandMark />
           <div className="min-w-0">
             <h1 className="truncate text-sm font-semibold text-text">{session.title}</h1>
-            <p className="truncate text-xs uppercase tracking-caps text-text-muted compact:hidden">
-              {session.syncEnabled ? "Sync enabled" : "Independent panes"} / Active{" "}
-              {effectiveActivePaneId}
-            </p>
           </div>
         </div>
 

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { Columns2, FileVideo, Play, Search, Star } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Columns2, FileVideo, Search } from "lucide-react";
 import {
   ConfirmDeleteButton,
   InlineRename,
@@ -15,313 +15,260 @@ import {
   updateStoredVideoMetadata,
 } from "@/lib/storage/session-storage";
 import { useLocalLibrary } from "@/lib/storage/use-stored-videos";
-import type { AnalysisSession, VideoAsset } from "@/lib/types";
-import { cn, formatDate, formatDuration } from "@/lib/utils";
+import type { SwingOrientation, VideoAsset } from "@/lib/types";
+import { formatDate, formatDuration } from "@/lib/utils";
 
-type LibraryTab = "my-swings" | "references" | "recent";
+const byLastOpened = <T extends { lastOpenedAt: string }>(a: T, b: T) =>
+  new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime();
 
 export function LibraryBrowser() {
   const library = useLocalLibrary();
-  const [activeTab, setActiveTab] = useState<LibraryTab>("my-swings");
   const [query, setQuery] = useState("");
   const [storageVersion, setStorageVersion] = useState(0);
 
-  useEffect(() => {
-    // Read ?tab= after mount (not during render) so the static page hydrates cleanly.
-    if (new URLSearchParams(window.location.search).get("tab") === "references") {
-      void Promise.resolve().then(() => setActiveTab("references"));
-    }
-  }, []);
-
-  const allVideos = library.videos;
-  const allSessions = library.sessions;
   const videoById = useMemo(
-    () => new Map(allVideos.map((video) => [video.id, video])),
-    [allVideos],
+    () => new Map(library.videos.map((video) => [video.id, video])),
+    [library.videos],
   );
-  const mostRecentSession = [...allSessions].sort(
-    (a, b) => new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime(),
-  )[0];
-  const compareSessionId = mostRecentSession?.id ?? "sample-session";
-  const actions: LibraryActions = {
-    renameSession: (id, title) => renameStoredSession(id, title).then(library.reload),
-    deleteSession: async (id) => {
-      await deleteStoredSession(id);
-      await library.reload();
-      setStorageVersion((current) => current + 1);
-    },
-    renameVideo: (id, title) => updateStoredVideoMetadata(id, { title }).then(library.reload),
-    deleteVideo: async (id) => {
-      await deleteStoredVideo(id);
-      await library.reload();
-      setStorageVersion((current) => current + 1);
-    },
-  };
-  const normalizedQuery = query.trim().toLowerCase();
-  const filteredSessions = allSessions.filter((session) => {
+  const sessions = [...library.sessions].sort(byLastOpened);
+  // "Add to compare" opens the most recently used session with the reference in the second pane.
+  const compareSessionId = sessions[0]?.id ?? "sample-session";
+  const refreshStorage = () => setStorageVersion((current) => current + 1);
+
+  const needle = query.trim().toLowerCase();
+  const matches = (...fields: Array<string | undefined>) =>
+    fields.join(" ").toLowerCase().includes(needle);
+  const mySwings = sessions.filter((session) => {
     const video = videoById.get(session.primaryVideoId);
-    const haystack = `${session.title} ${video?.clubTag ?? ""} ${video?.orientation ?? ""}`.toLowerCase();
-    return haystack.includes(normalizedQuery);
+    return matches(session.title, video?.clubTag, video?.orientation);
   });
-  const filteredReferences = allVideos.filter((video) => {
-    const haystack =
-      `${video.title} ${video.ownerName} ${video.clubTag} ${video.orientation}`.toLowerCase();
-    return video.sourceType === "reference" && haystack.includes(normalizedQuery);
-  });
-  const recentSessions = [...filteredSessions].sort(
-    (a, b) => new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime(),
+  const references = library.videos.filter(
+    (video) =>
+      video.sourceType === "reference" &&
+      matches(video.title, video.ownerName, video.clubTag, video.orientation),
   );
 
   return (
-    <main className="mx-auto w-full max-w-[1600px] px-4 py-4 lg:px-6">
-      <section className="overflow-hidden rounded-panel border border-border bg-surface-1">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2.5">
-          <div>
-            <p className="text-xs uppercase tracking-caps text-text-muted">
-              Media bin
-            </p>
-            <h1 className="mt-1 text-xl font-semibold text-text">Video library</h1>
-            <div className="mt-1.5">
-              <StorageMeter version={storageVersion} />
-            </div>
+    <main className="mx-auto w-full max-w-6xl px-4 py-6 lg:px-6 lg:py-8">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-text">Library</h1>
+          <div className="mt-2">
+            <StorageMeter version={storageVersion} />
           </div>
-
-          <label className="flex h-8 min-w-64 items-center gap-2 border border-border bg-bg/30 px-2.5 text-sm text-text-muted">
-            <Search className="size-4" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search swings, clubs, tags"
-              className="min-w-0 flex-1 bg-transparent text-text placeholder:text-text-muted"
-            />
-          </label>
         </div>
 
-        <div className="flex flex-wrap border-b border-border">
-          {[
-            { id: "my-swings" as const, label: "My swings", count: filteredSessions.length },
-            { id: "references" as const, label: "References", count: filteredReferences.length },
-            { id: "recent" as const, label: "Recently used", count: recentSessions.length },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                "h-9 border-r border-border px-3 text-sm",
-                activeTab === tab.id
-                  ? "bg-accent-dim text-text"
-                  : "text-text-muted hover:bg-surface-2 hover:text-text",
-              )}
-            >
-              {tab.label} <span className="font-mono text-xs opacity-70">{tab.count}</span>
-            </button>
-          ))}
-        </div>
-
-        {activeTab === "references" ? (
-          <ReferenceTable
-            references={filteredReferences}
-            compareSessionId={compareSessionId}
-            actions={actions}
+        <label className="flex h-9 w-full items-center gap-2 rounded-control border border-border bg-surface-1 px-2.5 text-sm text-text-muted sm:w-72 pointer-coarse:h-10">
+          <Search className="size-4" aria-hidden />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search by name, club or view"
+            aria-label="Search the library"
+            className="min-w-0 flex-1 bg-transparent text-text placeholder:text-text-muted"
           />
+        </label>
+      </header>
+
+      <LibrarySection title="My swings" count={mySwings.length}>
+        {mySwings.length === 0 ? (
+          <EmptyLine>
+            {needle ? "No swings match." : "No swings yet."}{" "}
+            {needle ? null : (
+              <Link href="/" className="text-text underline underline-offset-4">
+                Upload your swing
+              </Link>
+            )}
+          </EmptyLine>
         ) : (
-          <SessionTable
-            sessions={activeTab === "recent" ? recentSessions : filteredSessions}
-            videoById={videoById}
-            showRecentMarker={activeTab === "recent"}
-            actions={actions}
-          />
+          <CardGrid>
+            {mySwings.map((session) => {
+              const video = videoById.get(session.primaryVideoId);
+
+              return (
+                <SwingCard
+                  key={session.id}
+                  href={`/analysis/${session.id}`}
+                  openLabel={`Open ${session.title}`}
+                  video={video}
+                  title={
+                    <InlineRename
+                      value={session.title}
+                      label="session"
+                      onSave={(title) => void renameStoredSession(session.id, title).then(library.reload)}
+                    />
+                  }
+                  meta={formatDate(session.lastOpenedAt)}
+                  actions={
+                    <>
+                      <Link
+                        href={`/analysis/${session.id}?compare=true`}
+                        className={secondaryButton}
+                      >
+                        <Columns2 className="size-3.5" aria-hidden />
+                        Compare
+                      </Link>
+                      <ConfirmDeleteButton
+                        label={session.title}
+                        consequence="Deletes this session and its video from this browser."
+                        onConfirm={async () => {
+                          await deleteStoredSession(session.id);
+                          await library.reload();
+                          refreshStorage();
+                        }}
+                      />
+                    </>
+                  }
+                />
+              );
+            })}
+          </CardGrid>
         )}
-      </section>
+      </LibrarySection>
+
+      <LibrarySection id="references" title="References" count={references.length}>
+        {references.length === 0 ? (
+          <EmptyLine>
+            {needle
+              ? "No references match."
+              : "No references yet. Upload a model swing and turn on “Save as reference” to compare against it."}
+          </EmptyLine>
+        ) : (
+          <CardGrid>
+            {references.map((video) => {
+              const compareHref = `/analysis/${compareSessionId}?compare=true&ref=${encodeURIComponent(video.id)}`;
+
+              return (
+                <SwingCard
+                  key={video.id}
+                  href={compareHref}
+                  openLabel={`Compare against ${video.title}`}
+                  video={video}
+                  title={
+                    <InlineRename
+                      value={video.title}
+                      label="reference"
+                      onSave={(title) =>
+                        void updateStoredVideoMetadata(video.id, { title }).then(library.reload)
+                      }
+                    />
+                  }
+                  meta={`Added ${formatDate(video.createdAt)}`}
+                  actions={
+                    <>
+                      <Link href={compareHref} className={secondaryButton}>
+                        <Columns2 className="size-3.5" aria-hidden />
+                        Add to compare
+                      </Link>
+                      <ConfirmDeleteButton
+                        label={video.title}
+                        consequence="Deletes this clip. Sessions comparing against it keep their work."
+                        onConfirm={async () => {
+                          await deleteStoredVideo(video.id);
+                          await library.reload();
+                          refreshStorage();
+                        }}
+                      />
+                    </>
+                  }
+                />
+              );
+            })}
+          </CardGrid>
+        )}
+      </LibrarySection>
     </main>
   );
 }
 
-interface LibraryActions {
-  renameSession: (id: string, title: string) => Promise<unknown>;
-  deleteSession: (id: string) => Promise<unknown>;
-  renameVideo: (id: string, title: string) => Promise<unknown>;
-  deleteVideo: (id: string) => Promise<unknown>;
-}
+const secondaryButton =
+  "inline-flex h-8 items-center gap-1.5 rounded-control border border-border px-2.5 text-xs text-text hover:border-border-strong pointer-coarse:h-10";
 
-const rowGrid = "lg:grid-cols-[minmax(0,1fr)_100px_100px_70px_250px]";
-
-function SessionTable({
-  sessions,
-  videoById,
-  showRecentMarker,
-  actions,
+function LibrarySection({
+  id,
+  title,
+  count,
+  children,
 }: {
-  sessions: AnalysisSession[];
-  videoById: Map<string, VideoAsset>;
-  showRecentMarker: boolean;
-  actions: LibraryActions;
+  id?: string;
+  title: string;
+  count: number;
+  children: ReactNode;
 }) {
-  if (sessions.length === 0) {
-    return (
-      <p className="px-3 py-6 text-sm text-text-muted">
-        No swings yet.{" "}
-        <Link href="/" className="text-accent underline">
-          Import one
-        </Link>{" "}
-        to get started.
-      </p>
-    );
-  }
-
   return (
-    <div>
-      <div className={`grid ${rowGrid} border-b border-border px-3 py-2 text-xs uppercase tracking-caps text-text-muted max-lg:hidden`}>
-        <span>Video</span>
-        <span>Club</span>
-        <span>View</span>
-        <span>Media</span>
-        <span className="text-right">Actions</span>
-      </div>
-
-      <div className="divide-y divide-border">
-        {sessions.map((session) => {
-          const video = videoById.get(session.primaryVideoId);
-
-          return (
-            <article
-              key={session.id}
-              className={`grid gap-3 px-3 py-2.5 ${rowGrid} lg:items-center`}
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <VideoThumbnail video={video} />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <InlineRename
-                      value={session.title}
-                      label="session"
-                      onSave={(title) => void actions.renameSession(session.id, title)}
-                    />
-                    {showRecentMarker ? <Star className="size-3.5 text-accent" /> : null}
-                  </div>
-                  <p className="mt-1 truncate text-xs text-text-muted">
-                    {formatDate(session.lastOpenedAt)} / {session.snapshotMarkers.length} markers
-                  </p>
-                </div>
-              </div>
-
-              <p className="text-sm text-text-muted">{video?.clubTag ?? "Swing"}</p>
-              <p className="text-sm text-text-muted">
-                {video?.orientation === "down-the-line" ? "Down line" : "Face-on"}
-              </p>
-              <p className="font-mono text-xs text-text-muted">
-                {video ? `${video.fps ?? 60} fps` : "Local"}
-              </p>
-              <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
-                <Link
-                  href={`/analysis/${session.id}`}
-                  className="flex h-8 items-center gap-1.5 border border-border px-2.5 text-xs text-text hover:border-accent"
-                >
-                  <Play className="size-3.5" />
-                  Open
-                </Link>
-                <Link
-                  href={`/analysis/${session.id}?compare=true`}
-                  className="flex h-8 items-center gap-1.5 border border-border px-2.5 text-xs text-text hover:border-border-strong"
-                >
-                  <Columns2 className="size-3.5" />
-                  Compare
-                </Link>
-                <ConfirmDeleteButton
-                  label={session.title}
-                  consequence="Deletes this session and its video from this browser."
-                  onConfirm={() => actions.deleteSession(session.id)}
-                />
-              </div>
-            </article>
-          );
-        })}
-      </div>
-    </div>
+    <section id={id} className="mt-10 scroll-mt-16" aria-label={title}>
+      <h2 className="flex items-baseline gap-2 border-b border-border pb-2 text-xs uppercase tracking-caps text-text-muted">
+        {title}
+        <span className="font-mono text-text-faint">{count}</span>
+      </h2>
+      <div className="mt-4">{children}</div>
+    </section>
   );
 }
 
-function ReferenceTable({
-  references,
-  compareSessionId,
-  actions,
-}: {
-  references: VideoAsset[];
-  compareSessionId: string;
-  actions: LibraryActions;
-}) {
-  if (references.length === 0) {
-    return (
-      <p className="px-3 py-6 text-sm text-text-muted">
-        No references yet. Import a clip from the{" "}
-        <Link href="/" className="text-accent underline">
-          home screen
-        </Link>{" "}
-        and turn on &ldquo;Save as reference&rdquo; to compare your swing against it.
-      </p>
-    );
-  }
-
+function CardGrid({ children }: { children: ReactNode }) {
   return (
-    <div className="divide-y divide-border">
-      {references.map((video) => (
-        <article
-          key={video.id}
-          className={`grid gap-3 px-3 py-2.5 ${rowGrid} lg:items-center`}
-        >
-          <div className="flex min-w-0 items-center gap-3">
-            <VideoThumbnail video={video} />
-            <div className="min-w-0">
-              <InlineRename
-                value={video.title}
-                label="reference"
-                onSave={(title) => void actions.renameVideo(video.id, title)}
-              />
-              <p className="mt-1 truncate text-xs text-text-muted">
-                Added {formatDate(video.createdAt)}
-              </p>
-            </div>
-          </div>
-          <p className="text-sm text-text-muted">{video.clubTag}</p>
-          <p className="text-sm text-text-muted">
-            {video.orientation === "down-the-line" ? "Down line" : "Face-on"}
-          </p>
-          <p className="font-mono text-xs text-text-muted">{video.fps ?? 60} fps</p>
-          <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
-            <Link
-              href={`/analysis/${compareSessionId}?compare=true&ref=${encodeURIComponent(video.id)}`}
-              className="flex h-8 items-center gap-1.5 border border-border px-2.5 text-xs text-text hover:border-border-strong"
-            >
-              <Columns2 className="size-3.5" />
-              Add to compare
-            </Link>
-            <ConfirmDeleteButton
-              label={video.title}
-              consequence="Deletes this clip. Sessions comparing against it keep their work."
-              onConfirm={() => actions.deleteVideo(video.id)}
-            />
-          </div>
-        </article>
-      ))}
-    </div>
+    <div className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-5">{children}</div>
   );
 }
 
-function VideoThumbnail({ video }: { video?: VideoAsset }) {
+function EmptyLine({ children }: { children: ReactNode }) {
+  return <p className="text-sm text-text-muted">{children}</p>;
+}
+
+/** A clip as filmed (portrait or landscape, never cropped), its name, date, club and view. */
+function SwingCard({
+  href,
+  openLabel,
+  video,
+  title,
+  meta,
+  actions,
+}: {
+  href: string;
+  openLabel: string;
+  video?: VideoAsset;
+  title: ReactNode;
+  meta: string;
+  actions: ReactNode;
+}) {
   return (
-    <div className="relative flex aspect-video w-28 shrink-0 items-center justify-center overflow-hidden bg-bg text-accent">
-      {video?.thumbnailUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={video.thumbnailUrl} alt="" className="h-full w-full object-cover opacity-85" />
-      ) : (
-        <FileVideo className="size-5" />
-      )}
-      {video ? (
-        <span className="absolute bottom-1 right-1 bg-bg/75 px-1.5 py-0.5 font-mono text-xs text-text">
-          {formatDuration(video.duration)}
-        </span>
-      ) : null}
-    </div>
+    <article className="flex min-w-0 flex-col">
+      <Link
+        href={href}
+        aria-label={openLabel}
+        className="relative flex aspect-[3/4] items-center justify-center overflow-hidden rounded-panel border border-border bg-bg text-text-faint hover:border-border-strong"
+      >
+        {video?.thumbnailUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={video.thumbnailUrl} alt="" className="h-full w-full object-contain" />
+        ) : (
+          <FileVideo className="size-5" aria-hidden />
+        )}
+        {video ? (
+          <span className="absolute bottom-1.5 right-1.5 rounded-control bg-bg/80 px-1.5 py-0.5 font-mono text-xs text-text">
+            {formatDuration(video.duration)}
+          </span>
+        ) : null}
+      </Link>
+
+      <div className="mt-2.5 min-w-0">{title}</div>
+      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
+        <span>{meta}</span>
+        {video?.clubTag ? <span>{video.clubTag}</span> : null}
+        {video?.orientation ? <ViewTag orientation={video.orientation} /> : null}
+      </p>
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">{actions}</div>
+    </article>
+  );
+}
+
+/** The camera view, the same short mono tag everywhere. */
+export function ViewTag({ orientation }: { orientation: SwingOrientation }) {
+  return (
+    <span className="rounded-control border border-border px-1.5 font-mono text-xs uppercase text-text-muted">
+      {orientation === "down-the-line" ? "DTL" : "Face-on"}
+    </span>
   );
 }
