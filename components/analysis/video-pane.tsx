@@ -102,7 +102,7 @@ interface VideoPaneProps {
   detectedPositions: ReadonlySet<string>;
   /** Pose found a swing in this clip, so positions can be detected. */
   canAutoDetect: boolean;
-  onAutoPositions: () => void;
+  onAutoPositions: () => number | null;
   activeTool: AnnotationTool;
   /**
    * "phone": natural height in a scrolling page, chips and timeline above the buttons.

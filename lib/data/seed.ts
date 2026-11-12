@@ -44,7 +44,7 @@ function positionMarkers(
   sessionKey: string,
   paneId: PaneId,
   videoId: string,
-  times: Record<"Address" | "Takeaway" | "Top" | "Impact" | "Finish", number>,
+  times: Record<"Address" | "Top" | "Impact" | "Finish", number>,
 ): SnapshotMarker[] {
   return Object.entries(times).map(([label, time]) => ({
     id: `${sessionKey}-marker-${label.toLowerCase()}`,
@@ -103,7 +103,6 @@ export const sampleSessions: AnalysisSession[] = [
     },
     snapshotMarkers: positionMarkers("sample-session", "primary", "sample-video-face-on", {
       Address: 1.5,
-      Takeaway: 1.85,
       Top: 2.48,
       Impact: 2.75,
       Finish: 3.75,
@@ -122,7 +121,6 @@ export const sampleSessions: AnalysisSession[] = [
     annotations: { primary: [], secondary: [] },
     snapshotMarkers: positionMarkers("sample-session-dtl", "primary", "sample-video-down-the-line", {
       Address: 1.0,
-      Takeaway: 1.35,
       Top: 1.82,
       Impact: 2.05,
       Finish: 3.0,

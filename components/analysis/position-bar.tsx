@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
-import { Crosshair, Pencil, Plus, WandSparkles, X } from "lucide-react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { Check, Crosshair, Pencil, Plus, WandSparkles, X } from "lucide-react";
 import { frameIndexAt } from "@/lib/analysis/frames";
-import { positionKey, SWING_POSITIONS } from "@/lib/analysis/positions";
+import { markerRow, positionKey } from "@/lib/analysis/positions";
 import type { SnapshotMarker } from "@/lib/types";
 import type { TimeStore } from "@/lib/video/time-store";
 import { cn, formatTimecode } from "@/lib/utils";
@@ -20,7 +20,8 @@ interface PositionBarProps {
   /** Name offered for the next custom marker. */
   nextCustomLabel: string;
   canAutoDetect: boolean;
-  onAutoDetect: () => void;
+  /** Re-detects the four positions; returns how many were set, or null when no swing was found. */
+  onAutoDetect: () => number | null;
   onJump: (label: string) => void;
   /** Sets (or moves) a swing position to the current frame. */
   onMark: (label: string) => void;
@@ -46,9 +47,10 @@ const iconButton =
   "flex h-7 w-6 shrink-0 items-center justify-center border text-text-muted hover:text-text pointer-coarse:h-9 pointer-coarse:w-8";
 
 /**
- * The pane's marker row: the six swing positions, then any custom markers, then "Custom" to add
- * one. An unmarked position is set at the current frame; a marked chip jumps there. In Edit mode a
- * chip click moves it to the current frame, × clears it, and custom names can be changed.
+ * The pane's marker row, in swing order: Address, Top, Impact and Finish, with custom markers
+ * where they fall in the clip. An unmarked position is set at the current frame; a marked chip
+ * jumps there. "Set" then a chip moves that marker to the current frame (the quick fix when
+ * detection is off). Edit renames custom markers and removes markers. Auto re-runs detection.
  */
 export function PositionBar({
   timeStore,
@@ -70,74 +72,124 @@ export function PositionBar({
   className,
 }: PositionBarProps) {
   const currentTime = useSyncExternalStore(timeStore.subscribe, timeStore.get, () => 0);
-  const [editing, setEditing] = useState(false);
+  const [mode, setMode] = useState<"normal" | "set" | "edit">("normal");
   const [adding, setAdding] = useState(false);
+  const [autoNote, setAutoNote] = useState<string | null>(null);
   const currentFrame = frameIndexAt(currentTime, fps);
   const isHere = (time: number) => frameIndexAt(time, fps) === currentFrame;
+  const setting = mode === "set";
+  const editing = mode === "edit";
+
+  // Escape leaves Set without moving anything.
+  useEffect(() => {
+    if (!setting) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        setMode("normal");
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [setting]);
+
+  useEffect(() => {
+    if (!autoNote) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setAutoNote(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [autoNote]);
+
+  const runAuto = () => {
+    const count = onAutoDetect();
+    setMode("normal");
+    setAutoNote(
+      count === null ? "No swing found" : `Set ${count} position${count === 1 ? "" : "s"} from pose`,
+    );
+  };
+
+  const pickable = "border-dashed border-accent text-text hover:bg-accent-dim";
 
   return (
     <div className={cn("mt-1.5 flex items-center gap-1 overflow-x-auto", className)} role="group" aria-label="Swing positions">
       <button
         type="button"
-        onClick={() => setEditing((current) => !current)}
-        aria-pressed={editing}
-        title={editing ? "Done editing" : "Edit markers: move to this frame, rename or remove"}
+        onClick={() => setMode(setting ? "normal" : "set")}
+        aria-pressed={setting}
+        title={setting ? "Cancel (Esc)" : "Set a marker to this frame: press, then pick the marker"}
         className={cn(
           "flex h-7 shrink-0 items-center gap-1 border px-1.5 text-xs pointer-coarse:h-9",
-          editing
+          setting
             ? "border-accent bg-accent-dim text-text"
-            : "border-border text-text-muted hover:border-border-strong hover:text-text",
+            : "border-border text-text hover:border-border-strong",
         )}
       >
-        <Pencil className="size-3.5" />
-        {editing ? "Done" : "Edit"}
+        <Crosshair className="size-3.5" />
+        {setting ? "Pick one" : "Set"}
       </button>
 
-      {SWING_POSITIONS.map((label) => {
-        const time = positions.get(positionKey(label));
-        const isSet = time !== undefined;
-        const here = isSet && isHere(time);
-        const isDetected = isSet && detected.has(positionKey(label));
+      {markerRow(positions, custom).map((item) => {
+        if (item.kind === "position") {
+          const { label, time } = item;
+          const isSet = time !== undefined;
+          const isDetected = isSet && detected.has(positionKey(label));
 
-        return (
-          <span key={label} className="flex shrink-0">
-            <button
-              type="button"
-              onClick={() => (editing || !isSet ? onMark(label) : onJump(label))}
-              title={
-                editing || !isSet
-                  ? `Mark ${label} at this frame`
-                  : `Jump to ${label} (${formatTimecode(time)})${isDetected ? " · detected from pose" : ""}`
-              }
-              className={cn(
-                chip,
-                editing && isSet ? "border-r-0" : null,
-                editing
-                  ? "border-dashed border-accent text-text hover:bg-accent-dim"
-                  : chipState(here ? "current" : isSet ? "marked" : "unmarked"),
-              )}
-            >
-              {label}
-            </button>
-            {editing && isSet ? (
+          return (
+            <span key={label} className="flex shrink-0">
               <button
                 type="button"
-                onClick={() => onClearPosition(label)}
-                className={cn(iconButton, "border-dashed border-accent")}
-                aria-label={`Clear ${label}`}
-                title={`Clear ${label}`}
+                onClick={() => {
+                  if (setting || (!editing && !isSet)) {
+                    onMark(label);
+                    setMode("normal");
+                  } else if (!editing) {
+                    onJump(label);
+                  }
+                }}
+                title={
+                  setting || !isSet
+                    ? `Set ${label} to this frame`
+                    : `Jump to ${label} (${formatTimecode(time)})${isDetected ? " · detected from pose" : ""}`
+                }
+                className={cn(
+                  chip,
+                  "flex items-center gap-1",
+                  editing && isSet ? "border-r-0" : null,
+                  setting || editing
+                    ? pickable
+                    : chipState(isSet && isHere(time) ? "current" : isSet ? "marked" : "unmarked"),
+                )}
               >
-                <X className="size-3" />
+                {isDetected && !setting && !editing ? (
+                  // Placed by pose detection; "Set" corrects it.
+                  <span className="size-1 rounded-full bg-text-muted" aria-label="detected" />
+                ) : null}
+                {label}
               </button>
-            ) : null}
-          </span>
-        );
-      })}
+              {editing && isSet ? (
+                <button
+                  type="button"
+                  onClick={() => onClearPosition(label)}
+                  className={cn(iconButton, "border-dashed border-accent")}
+                  aria-label={`Clear ${label}`}
+                  title={`Clear ${label}`}
+                >
+                  <X className="size-3" />
+                </button>
+              ) : null}
+            </span>
+          );
+        }
 
-      {custom.length > 0 ? <span className="mx-0.5 h-4 w-px shrink-0 bg-border" aria-hidden /> : null}
+        const { marker } = item;
 
-      {custom.map((marker) =>
-        editing ? (
+        return editing ? (
           <span key={marker.id} className="flex shrink-0">
             <input
               defaultValue={marker.label}
@@ -163,15 +215,6 @@ export function PositionBar({
             />
             <button
               type="button"
-              onClick={() => onMoveCustom(marker.id)}
-              className={cn(iconButton, "border-x-0 border-dashed border-accent")}
-              aria-label={`Move ${marker.label} to this frame`}
-              title={`Move ${marker.label} to this frame`}
-            >
-              <Crosshair className="size-3" />
-            </button>
-            <button
-              type="button"
               onClick={() => onDeleteCustom(marker.id)}
               className={cn(iconButton, "border-dashed border-accent")}
               aria-label={`Delete ${marker.label}`}
@@ -184,14 +227,28 @@ export function PositionBar({
           <button
             key={marker.id}
             type="button"
-            onClick={() => onSeekCustom(marker)}
-            title={`Jump to ${marker.label} (${formatTimecode(marker.time)})`}
-            className={cn(chip, chipState(isHere(marker.time) ? "current" : "marked"))}
+            onClick={() => {
+              if (setting) {
+                onMoveCustom(marker.id);
+                setMode("normal");
+              } else {
+                onSeekCustom(marker);
+              }
+            }}
+            title={
+              setting
+                ? `Set ${marker.label} to this frame`
+                : `Jump to ${marker.label} (${formatTimecode(marker.time)})`
+            }
+            className={cn(
+              chip,
+              setting ? pickable : chipState(isHere(marker.time) ? "current" : "marked"),
+            )}
           >
             {marker.label}
           </button>
-        ),
-      )}
+        );
+      })}
 
       {adding ? (
         <input
@@ -221,8 +278,11 @@ export function PositionBar({
       ) : (
         <button
           type="button"
-          onClick={() => setAdding(true)}
-          title="Add a named marker at this frame"
+          onClick={() => {
+            setMode("normal");
+            setAdding(true);
+          }}
+          title="Add a named marker at this frame; it takes its place in the row by time"
           className={cn(
             chip,
             "flex items-center gap-1 border-dashed border-border px-1.5 font-sans text-text-muted hover:border-border-strong hover:text-text",
@@ -233,16 +293,39 @@ export function PositionBar({
         </button>
       )}
 
+      <button
+        type="button"
+        onClick={() => setMode(editing ? "normal" : "edit")}
+        aria-pressed={editing}
+        aria-label={editing ? "Done editing markers" : "Edit markers"}
+        title={editing ? "Done" : "Rename custom markers or remove markers"}
+        className={cn(
+          "flex h-7 shrink-0 items-center gap-1 border px-1.5 text-xs pointer-coarse:h-9",
+          editing
+            ? "border-accent bg-accent-dim text-text"
+            : "border-border text-text-muted hover:border-border-strong hover:text-text",
+        )}
+      >
+        {editing ? <Check className="size-3.5" /> : <Pencil className="size-3.5" />}
+        {editing ? "Done" : null}
+      </button>
+
       {canAutoDetect ? (
         <button
           type="button"
-          onClick={onAutoDetect}
-          title="Detect Address, Top, Impact and Finish from the pose (replaces those marks)"
+          onClick={runAuto}
+          title="Detect Address, Top, Impact and Finish from the pose (replaces those four)"
           className="flex h-7 shrink-0 items-center gap-1 border border-border px-1.5 text-xs text-text-muted hover:border-border-strong hover:text-text pointer-coarse:h-9"
         >
           <WandSparkles className="size-3.5" />
           Auto
         </button>
+      ) : null}
+
+      {autoNote ? (
+        <span role="status" className="shrink-0 whitespace-nowrap px-1 text-xs text-text-muted">
+          {autoNote}
+        </span>
       ) : null}
     </div>
   );

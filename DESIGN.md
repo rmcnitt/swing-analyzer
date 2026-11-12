@@ -72,7 +72,7 @@ Every icon-only button has an `aria-label` and a tooltip with its shortcut (from
 
 ## Components
 - **Buttons:** primary = `--accent` bg, `#0B0B0C` text. Secondary = transparent, 1px `--border`, `--text`. Ghost = text only. One primary per view.
-- **Position chips** (Address / Top / Impact / Finish): 28px tall, mono label. Unmarked = `--text-faint` outline; marked = `--text`; current = `--accent` outline + `--accent-dim` fill. Auto-detected and hand-marked look the same.
+- **Position chips** (Address / Top / Impact / Finish): 28px tall, mono label. Unmarked = `--text-faint` outline; marked = `--text`; current = `--accent` outline + `--accent-dim` fill. A detected position carries a small muted dot. The row starts with those four; custom markers sit among them in time order. "Set", then a chip, moves that marker to the current frame.
 - **Swing checks panel** (per pane, Gauge button): a compact floating table that snaps to any corner of the pane and
   remembers it. Rows = checks (Tempo, Head, Posture, Early extension, Lead arm), each with its own switch.
   Columns = Address / Top / Impact, whose headers double as jump buttons. Cells = value (mono) + unit + status dot

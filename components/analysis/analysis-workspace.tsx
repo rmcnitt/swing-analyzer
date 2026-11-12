@@ -706,13 +706,13 @@ function WorkspaceView({
     applyPendingAutoPositions();
   }, [poseVersion, session.panes]);
 
-  /** "Auto": replace this pane's positions with the detected ones. */
+  /** "Auto": replace this pane's positions with the detected ones; returns how many were found. */
   const handleAutoPositions = (paneId: PaneId) => {
     const videoId = session.panes.find((pane) => pane.id === paneId)?.videoId;
     const detected = videoId ? detectPositions(videoId) : undefined;
 
     if (!videoId || !detected) {
-      return;
+      return null;
     }
 
     setSession((current) => ({
@@ -722,6 +722,8 @@ function WorkspaceView({
         createId: () => createId("marker"),
       }).markers,
     }));
+
+    return Object.values(detected).filter((time) => time !== undefined).length;
   };
 
   const handleFitBoth = () => {

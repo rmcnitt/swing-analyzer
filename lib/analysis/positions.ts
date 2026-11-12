@@ -1,14 +1,10 @@
 import type { AnalysisPane, SnapshotMarker } from "@/lib/types";
 
-/** The swing positions offered as one-click checkpoints in each pane. */
-export const SWING_POSITIONS = [
-  "Address",
-  "Takeaway",
-  "Top",
-  "Transition",
-  "Impact",
-  "Finish",
-] as const;
+/**
+ * The swing positions every clip starts with (the ones pose detection can find). Anything else
+ * is a custom marker the user adds by name.
+ */
+export const SWING_POSITIONS = ["Address", "Top", "Impact", "Finish"] as const;
 
 export type SwingPosition = (typeof SWING_POSITIONS)[number];
 
@@ -93,4 +89,71 @@ export function clearPositionMarker(
   const key = positionKey(label);
   const onClip = new Set(paneMarkers(markers, pane).map((marker) => marker.id));
   return markers.filter((marker) => !(onClip.has(marker.id) && positionKey(marker.label) === key));
+}
+
+export type MarkerRowItem =
+  | { kind: "position"; label: SwingPosition; time?: number }
+  | { kind: "custom"; marker: SnapshotMarker };
+
+/**
+ * The pane's marker row in swing order: the four positions, with each custom marker placed
+ * after the last marked position at or before its time (unmarked positions keep their place).
+ */
+export function markerRow(
+  positions: ReadonlyMap<string, number>,
+  custom: SnapshotMarker[],
+): MarkerRowItem[] {
+  const row: MarkerRowItem[] = SWING_POSITIONS.map((label) => ({
+    kind: "position",
+    label,
+    time: positions.get(positionKey(label)),
+  }));
+
+  for (const marker of [...custom].sort((a, b) => a.time - b.time)) {
+    let index = 0;
+
+    row.forEach((item, at) => {
+      const time = item.kind === "position" ? item.time : item.marker.time;
+
+      if (time !== undefined && time <= marker.time) {
+        index = at + 1;
+      }
+    });
+
+    row.splice(index, 0, { kind: "custom", marker });
+  }
+
+  return row;
+}
+
+/** Positions the app used to offer: never detected, and tapping one marked wherever the playhead was. */
+const RETIRED_POSITIONS = new Set(["takeaway", "transition"]);
+/** Closer than this (seconds, under a frame at 50 fps) counts as the same frame. */
+const SAME_FRAME = 0.02;
+
+/**
+ * Old Takeaway / Transition marks: dropped from the bundled samples and wherever they sit on the
+ * same frame as another marker on that clip (set by accident); any others stay as custom markers.
+ */
+export function retireLegacyPositions(markers: SnapshotMarker[], { sample = false } = {}) {
+  const retired = (marker: SnapshotMarker) => RETIRED_POSITIONS.has(positionKey(marker.label));
+
+  return markers.filter((marker) => {
+    if (!retired(marker)) {
+      return true;
+    }
+
+    if (sample) {
+      return false;
+    }
+
+    return !markers.some(
+      (other) =>
+        other !== marker &&
+        !retired(other) &&
+        other.paneId === marker.paneId &&
+        (!other.videoId || !marker.videoId || other.videoId === marker.videoId) &&
+        Math.abs(other.time - marker.time) < SAME_FRAME,
+    );
+  });
 }

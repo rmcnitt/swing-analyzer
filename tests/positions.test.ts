@@ -3,9 +3,11 @@ import {
   clearPositionMarker,
   customMarkers,
   isSwingPosition,
+  markerRow,
   nextCustomLabel,
   paneMarkers,
   positionTimes,
+  retireLegacyPositions,
   upsertPositionMarker,
 } from "@/lib/analysis/positions";
 import type { SnapshotMarker } from "@/lib/types";
@@ -87,5 +89,68 @@ describe("custom markers", () => {
     ];
     const kept = clearPositionMarker(markers, { id: "primary", videoId: "v1" }, "top");
     expect(kept.map((m) => m.id)).toEqual(["b", "c", "d"]);
+  });
+});
+
+describe("markerRow", () => {
+  const label = (item: ReturnType<typeof markerRow>[number]) =>
+    item.kind === "position" ? item.label : item.marker.label;
+
+  it("starts every clip with Address, Top, Impact and Finish", () => {
+    expect(markerRow(new Map(), []).map(label)).toEqual(["Address", "Top", "Impact", "Finish"]);
+  });
+
+  it("puts custom markers where they fall in the swing", () => {
+    const positions = new Map([
+      ["address", 1.5],
+      ["top", 2.5],
+      ["impact", 2.8],
+      ["finish", 3.5],
+    ]);
+    const row = markerRow(positions, [
+      marker({ id: "a", label: "Halfway back", time: 2.0 }),
+      marker({ id: "b", label: "Waggle", time: 0.5 }),
+      marker({ id: "c", label: "Release", time: 2.9 }),
+    ]);
+    expect(row.map(label)).toEqual(["Waggle", "Address", "Halfway back", "Top", "Impact", "Release", "Finish"]);
+  });
+
+  it("keeps unmarked positions in their place", () => {
+    const row = markerRow(new Map([["address", 1.5]]), [marker({ id: "a", label: "P2", time: 2 })]);
+    expect(row.map(label)).toEqual(["Address", "P2", "Top", "Impact", "Finish"]);
+  });
+});
+
+describe("retireLegacyPositions", () => {
+  it("drops an old Takeaway / Transition sitting on another marker's frame", () => {
+    const markers = [
+      marker({ id: "address", label: "Address", time: 1.5 }),
+      marker({ id: "takeaway", label: "Takeaway", time: 1.505 }),
+      marker({ id: "impact", label: "Impact", time: 2.8 }),
+      marker({ id: "transition", label: "Transition", time: 2.8 }),
+    ];
+    expect(retireLegacyPositions(markers).map((item) => item.id)).toEqual(["address", "impact"]);
+  });
+
+  it("keeps a deliberate one, which then shows as a custom marker", () => {
+    const markers = [
+      marker({ id: "address", label: "Address", time: 1.5 }),
+      marker({ id: "takeaway", label: "Takeaway", time: 1.85 }),
+    ];
+    expect(retireLegacyPositions(markers)).toHaveLength(2);
+    expect(customMarkers(markers).map((item) => item.id)).toEqual(["takeaway"]);
+  });
+
+  it("only compares markers on the same pane", () => {
+    const markers = [
+      marker({ id: "address", label: "Address", time: 1.5, paneId: "secondary" }),
+      marker({ id: "takeaway", label: "Takeaway", time: 1.5 }),
+    ];
+    expect(retireLegacyPositions(markers)).toHaveLength(2);
+  });
+
+  it("removes them all from the bundled samples", () => {
+    const markers = [marker({ id: "takeaway", label: "Takeaway", time: 1.85 })];
+    expect(retireLegacyPositions(markers, { sample: true })).toEqual([]);
   });
 });

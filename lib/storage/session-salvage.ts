@@ -1,4 +1,5 @@
 import { clampGeometry } from "@/lib/analysis/annotations";
+import { retireLegacyPositions } from "@/lib/analysis/positions";
 import type { AnalysisSession, AnnotationObject } from "@/lib/types";
 import {
   annotationSchema,
@@ -49,7 +50,7 @@ export function salvageSession(record: unknown): SalvageResult | null {
   const direct = sessionSchema.safeParse(record);
 
   if (direct.success) {
-    return { session: direct.data, droppedCount: 0 };
+    return { session: withCurrentPositions(direct.data), droppedCount: 0 };
   }
 
   if (!isRecord(record)) {
@@ -84,5 +85,13 @@ export function salvageSession(record: unknown): SalvageResult | null {
       : record.panes,
   });
 
-  return repaired.success ? { session: repaired.data, droppedCount } : null;
+  return repaired.success ? { session: withCurrentPositions(repaired.data), droppedCount } : null;
+}
+
+/** Sessions saved before Takeaway / Transition were retired (see retireLegacyPositions). */
+function withCurrentPositions(session: AnalysisSession): AnalysisSession {
+  const snapshotMarkers = retireLegacyPositions(session.snapshotMarkers, {
+    sample: session.userId === "sample",
+  });
+  return snapshotMarkers.length === session.snapshotMarkers.length ? session : { ...session, snapshotMarkers };
 }
