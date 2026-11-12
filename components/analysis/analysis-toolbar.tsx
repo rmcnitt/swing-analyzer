@@ -20,6 +20,7 @@ import { STROKE_WIDTHS } from "@/lib/analysis/annotations";
 import { TOOL_HOTKEYS } from "@/lib/analysis/shortcuts";
 import type { AnnotationTool, HexColor } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { ANNOTATION_SWATCHES } from "@/lib/design/tokens";
 
 const tools: Array<{
   id: AnnotationTool;
@@ -37,13 +38,7 @@ const tools: Array<{
   { id: "freehand", label: "Draw", icon: PenLine },
 ];
 
-const palette: HexColor[] = [
-  "#f97316",
-  "#38bdf8",
-  "#facc15",
-  "#4ade80",
-  "#f472b6",
-];
+const palette: readonly HexColor[] = ANNOTATION_SWATCHES;
 
 interface AnalysisToolbarProps {
   activeTool: AnnotationTool;
@@ -77,7 +72,7 @@ export function AnalysisToolbar({
   onToggleOverlay,
 }: AnalysisToolbarProps) {
   return (
-    <aside className="flex h-full min-h-0 w-full flex-col items-center overflow-y-auto border-r border-[color:var(--color-border)] bg-[#0f1012] px-1.5 py-2">
+    <aside className="flex h-full min-h-0 w-full flex-col items-center overflow-y-auto border-r border-border bg-surface-1 px-1.5 py-2">
       <div className="flex flex-col items-center gap-1">
         {tools.map((tool) => {
           const Icon = tool.icon;
@@ -89,9 +84,9 @@ export function AnalysisToolbar({
               onClick={() => onToolChange(tool.id)}
               title={`${tool.label} (${TOOL_HOTKEYS[tool.id]})`}
               className={cn(
-                "flex size-9 shrink-0 items-center justify-center border text-[color:var(--color-muted)] outline-none transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white pointer-coarse:size-11",
+                "flex size-9 shrink-0 items-center justify-center border text-text-muted transition hover:border-border-strong hover:bg-surface-2 hover:text-text pointer-coarse:size-11",
                 activeTool === tool.id
-                  ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/14 text-white shadow-[inset_3px_0_0_var(--color-accent)]"
+                  ? "border-accent bg-accent-dim text-text"
                   : "border-transparent bg-transparent",
               )}
               aria-label={tool.label}
@@ -102,7 +97,7 @@ export function AnalysisToolbar({
         })}
       </div>
 
-      <div className="my-2 h-px w-8 bg-white/10" />
+      <div className="my-2 h-px w-8 bg-border" />
 
       <div className="flex flex-col items-center gap-1.5">
         {palette.map((color) => (
@@ -113,8 +108,8 @@ export function AnalysisToolbar({
             className={cn(
               "size-[22px] shrink-0 border transition pointer-coarse:size-7",
               activeColor === color
-                ? "scale-110 border-white"
-                : "border-black/50 opacity-80 hover:opacity-100",
+                ? "scale-110 border-text"
+                : "border-bg/50 opacity-80 hover:opacity-100",
             )}
             style={{ backgroundColor: color }}
             aria-label={`Use ${color}`}
@@ -123,7 +118,7 @@ export function AnalysisToolbar({
         ))}
       </div>
 
-      <div className="my-2 h-px w-8 bg-white/10" />
+      <div className="my-2 h-px w-8 bg-border" />
 
       <div className="flex flex-col items-center gap-1" role="group" aria-label="Line width">
         {STROKE_WIDTHS.map((width) => (
@@ -137,21 +132,21 @@ export function AnalysisToolbar({
             className={cn(
               "flex h-6 w-9 items-center justify-center border",
               strokeWidth === width
-                ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/14"
-                : "border-transparent hover:border-white/20 hover:bg-white/[0.06]",
+                ? "border-accent bg-accent-dim"
+                : "border-transparent hover:border-border-strong hover:bg-surface-2",
             )}
           >
-            <span className="w-5 rounded-full bg-white/80" style={{ height: width }} />
+            <span className="w-5 rounded-full bg-text-muted" style={{ height: width }} />
           </button>
         ))}
       </div>
 
-      <div className="mt-auto flex flex-col items-center gap-1 border-t border-white/10 pt-2">
+      <div className="mt-auto flex flex-col items-center gap-1 border-t border-border pt-2">
         <button
           type="button"
           onClick={onUndo}
           title="Undo (⌘Z)"
-          className="flex size-9 shrink-0 items-center justify-center border border-transparent text-[color:var(--color-muted)] hover:border-white/20 hover:bg-white/[0.06] hover:text-white pointer-coarse:size-11"
+          className="flex size-9 shrink-0 items-center justify-center border border-transparent text-text-muted hover:border-border-strong hover:bg-surface-2 hover:text-text pointer-coarse:size-11"
           aria-label="Undo"
         >
           <RotateCcw className="size-4" />
@@ -160,7 +155,7 @@ export function AnalysisToolbar({
           type="button"
           onClick={onRedo}
           title="Redo (⇧⌘Z)"
-          className="flex size-9 shrink-0 items-center justify-center border border-transparent text-[color:var(--color-muted)] hover:border-white/20 hover:bg-white/[0.06] hover:text-white pointer-coarse:size-11"
+          className="flex size-9 shrink-0 items-center justify-center border border-transparent text-text-muted hover:border-border-strong hover:bg-surface-2 hover:text-text pointer-coarse:size-11"
           aria-label="Redo"
         >
           <RotateCw className="size-4" />
@@ -171,8 +166,8 @@ export function AnalysisToolbar({
           disabled={!hasSelectedAnnotation}
           title={hasSelectedAnnotation ? "Delete selected shape (Delete)" : "Select a shape to delete"}
           className={cn(
-            "flex size-9 shrink-0 items-center justify-center border border-transparent text-[color:var(--color-muted)] hover:border-white/20 hover:bg-white/[0.06] hover:text-white pointer-coarse:size-11 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-transparent disabled:hover:bg-transparent disabled:hover:text-[color:var(--color-muted)]",
-            hasSelectedAnnotation ? "border-[color:var(--color-accent)]/50" : null,
+            "flex size-9 shrink-0 items-center justify-center border border-transparent text-text-muted hover:border-border-strong hover:bg-surface-2 hover:text-text pointer-coarse:size-11 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-transparent disabled:hover:bg-transparent disabled:hover:text-text-muted",
+            hasSelectedAnnotation ? "border-accent/50" : null,
           )}
           aria-label="Delete selected shape"
         >
@@ -182,7 +177,7 @@ export function AnalysisToolbar({
           type="button"
           onClick={onClear}
           title="Clear active pane"
-          className="flex size-9 shrink-0 items-center justify-center border border-transparent text-[color:var(--color-muted)] hover:border-white/20 hover:bg-white/[0.06] hover:text-white pointer-coarse:size-11"
+          className="flex size-9 shrink-0 items-center justify-center border border-transparent text-text-muted hover:border-border-strong hover:bg-surface-2 hover:text-text pointer-coarse:size-11"
           aria-label="Clear active pane"
         >
           <Trash2 className="size-4" />
@@ -192,10 +187,10 @@ export function AnalysisToolbar({
           onClick={onToggleOverlay}
           title={overlayVisible ? "Hide drawings (O)" : "Show drawings (O)"}
           className={cn(
-            "flex size-9 shrink-0 items-center justify-center border hover:border-white/20 hover:bg-white/[0.06] hover:text-white pointer-coarse:size-11",
+            "flex size-9 shrink-0 items-center justify-center border hover:border-border-strong hover:bg-surface-2 hover:text-text pointer-coarse:size-11",
             overlayVisible
-              ? "border-transparent text-[color:var(--color-muted)]"
-              : "border-[color:var(--color-accent)] text-white",
+              ? "border-transparent text-text-muted"
+              : "border-accent text-text",
           )}
           aria-label={overlayVisible ? "Hide overlay" : "Show overlay"}
         >

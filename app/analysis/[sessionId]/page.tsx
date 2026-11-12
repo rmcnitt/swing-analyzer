@@ -17,7 +17,7 @@ export default async function AnalysisPage({ params }: AnalysisPageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-[color:var(--color-background)]">
+    <div className="min-h-screen bg-bg">
       <AnalysisWorkspace
         sessionId={sessionId}
         seedSession={session}

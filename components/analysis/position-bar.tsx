@@ -47,10 +47,10 @@ export function PositionBar({
         aria-pressed={markMode}
         title={markMode ? "Cancel" : "Set a position at the current frame"}
         className={cn(
-          "flex h-7 shrink-0 items-center gap-1 border px-1.5 text-[11px] pointer-coarse:h-9",
+          "flex h-7 shrink-0 items-center gap-1 border px-1.5 text-xs pointer-coarse:h-9",
           markMode
-            ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)] text-[color:var(--color-ink)]"
-            : "border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:border-white/25 hover:text-white",
+            ? "border-accent bg-accent text-bg"
+            : "border-border text-text-muted hover:border-border-strong hover:text-text",
         )}
       >
         <Crosshair className="size-3.5" />
@@ -81,18 +81,18 @@ export function PositionBar({
                 : `Jump to ${label} (${formatTimecode(time)})${isDetected ? " · detected from pose; Set to re-mark" : ""}`
             }
             className={cn(
-              "h-7 shrink-0 border px-2 text-[11px] transition pointer-coarse:h-9",
+              "h-7 shrink-0 border px-2 text-xs transition pointer-coarse:h-9",
               markMode
-                ? "border-dashed border-[color:var(--color-accent)] text-white hover:bg-[color:var(--color-accent)]/20"
+                ? "border-dashed border-accent text-text hover:bg-accent-dim"
                 : isHere
-                  ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/20 text-white"
+                  ? "border-accent bg-accent-dim text-text"
                   : isSet
-                    ? "border-white/20 text-white hover:border-[color:var(--color-accent)]"
-                    : "border-dashed border-white/12 text-[color:var(--color-muted)] hover:border-white/30 hover:text-white",
+                    ? "border-border-strong text-text hover:border-accent"
+                    : "border-dashed border-border text-text-muted hover:border-border-strong hover:text-text",
             )}
           >
             {isDetected ? (
-              <WandSparkles className="mr-1 inline size-3 align-[-2px] text-[color:var(--color-accent)]" aria-label="detected" />
+              <WandSparkles className="mr-1 inline size-3 align-[-2px] text-accent" aria-label="detected" />
             ) : null}
             {label}
           </button>
@@ -104,7 +104,7 @@ export function PositionBar({
           type="button"
           onClick={onAutoDetect}
           title="Detect Address, Top, Impact and Finish from the pose (replaces those marks)"
-          className="flex h-7 shrink-0 items-center gap-1 border border-[color:var(--color-border)] px-1.5 text-[11px] text-[color:var(--color-muted)] hover:border-white/25 hover:text-white pointer-coarse:h-9"
+          className="flex h-7 shrink-0 items-center gap-1 border border-border px-1.5 text-xs text-text-muted hover:border-border-strong hover:text-text pointer-coarse:h-9"
         >
           <WandSparkles className="size-3.5" />
           Auto

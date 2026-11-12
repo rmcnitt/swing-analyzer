@@ -74,30 +74,30 @@ export function LibraryBrowser() {
 
   return (
     <main className="mx-auto w-full max-w-[1600px] px-4 py-4 lg:px-6">
-      <section className="border border-[color:var(--color-border)] bg-[#0f1012]">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--color-border)] px-3 py-2.5">
+      <section className="overflow-hidden rounded-panel border border-border bg-surface-1">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2.5">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.16em] text-[color:var(--color-muted)]">
+            <p className="text-xs uppercase tracking-caps text-text-muted">
               Media bin
             </p>
-            <h1 className="mt-1 text-xl font-semibold text-white">Video library</h1>
+            <h1 className="mt-1 text-xl font-semibold text-text">Video library</h1>
             <div className="mt-1.5">
               <StorageMeter version={storageVersion} />
             </div>
           </div>
 
-          <label className="flex h-8 min-w-64 items-center gap-2 border border-[color:var(--color-border)] bg-black/30 px-2.5 text-sm text-[color:var(--color-muted)]">
+          <label className="flex h-8 min-w-64 items-center gap-2 border border-border bg-bg/30 px-2.5 text-sm text-text-muted">
             <Search className="size-4" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search swings, clubs, tags"
-              className="min-w-0 flex-1 bg-transparent text-white outline-none placeholder:text-slate-600"
+              className="min-w-0 flex-1 bg-transparent text-text placeholder:text-text-muted"
             />
           </label>
         </div>
 
-        <div className="flex flex-wrap border-b border-[color:var(--color-border)]">
+        <div className="flex flex-wrap border-b border-border">
           {[
             { id: "my-swings" as const, label: "My swings", count: filteredSessions.length },
             { id: "references" as const, label: "References", count: filteredReferences.length },
@@ -108,10 +108,10 @@ export function LibraryBrowser() {
               type="button"
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "h-9 border-r border-[color:var(--color-border)] px-3 text-sm",
+                "h-9 border-r border-border px-3 text-sm",
                 activeTab === tab.id
-                  ? "bg-[color:var(--color-accent)]/14 text-white"
-                  : "text-[color:var(--color-muted)] hover:bg-white/[0.04] hover:text-white",
+                  ? "bg-accent-dim text-text"
+                  : "text-text-muted hover:bg-surface-2 hover:text-text",
               )}
             >
               {tab.label} <span className="font-mono text-xs opacity-70">{tab.count}</span>
@@ -160,9 +160,9 @@ function SessionTable({
 }) {
   if (sessions.length === 0) {
     return (
-      <p className="px-3 py-6 text-sm text-[color:var(--color-muted)]">
+      <p className="px-3 py-6 text-sm text-text-muted">
         No swings yet.{" "}
-        <Link href="/" className="text-[color:var(--color-accent)] underline">
+        <Link href="/" className="text-accent underline">
           Import one
         </Link>{" "}
         to get started.
@@ -172,7 +172,7 @@ function SessionTable({
 
   return (
     <div>
-      <div className={`grid ${rowGrid} border-b border-[color:var(--color-border)] px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-[color:var(--color-muted)] max-lg:hidden`}>
+      <div className={`grid ${rowGrid} border-b border-border px-3 py-2 text-xs uppercase tracking-caps text-text-muted max-lg:hidden`}>
         <span>Video</span>
         <span>Club</span>
         <span>View</span>
@@ -180,7 +180,7 @@ function SessionTable({
         <span className="text-right">Actions</span>
       </div>
 
-      <div className="divide-y divide-[color:var(--color-border)]">
+      <div className="divide-y divide-border">
         {sessions.map((session) => {
           const video = videoById.get(session.primaryVideoId);
 
@@ -198,32 +198,32 @@ function SessionTable({
                       label="session"
                       onSave={(title) => void actions.renameSession(session.id, title)}
                     />
-                    {showRecentMarker ? <Star className="size-3.5 text-[color:var(--color-accent)]" /> : null}
+                    {showRecentMarker ? <Star className="size-3.5 text-accent" /> : null}
                   </div>
-                  <p className="mt-1 truncate text-xs text-[color:var(--color-muted)]">
+                  <p className="mt-1 truncate text-xs text-text-muted">
                     {formatDate(session.lastOpenedAt)} / {session.snapshotMarkers.length} markers
                   </p>
                 </div>
               </div>
 
-              <p className="text-sm text-[color:var(--color-muted)]">{video?.clubTag ?? "Swing"}</p>
-              <p className="text-sm text-[color:var(--color-muted)]">
+              <p className="text-sm text-text-muted">{video?.clubTag ?? "Swing"}</p>
+              <p className="text-sm text-text-muted">
                 {video?.orientation === "down-the-line" ? "Down line" : "Face-on"}
               </p>
-              <p className="font-mono text-xs text-[color:var(--color-muted)]">
+              <p className="font-mono text-xs text-text-muted">
                 {video ? `${video.fps ?? 60} fps` : "Local"}
               </p>
               <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
                 <Link
                   href={`/analysis/${session.id}`}
-                  className="flex h-8 items-center gap-1.5 border border-[color:var(--color-border)] px-2.5 text-xs text-white hover:border-[color:var(--color-accent)]"
+                  className="flex h-8 items-center gap-1.5 border border-border px-2.5 text-xs text-text hover:border-accent"
                 >
                   <Play className="size-3.5" />
                   Open
                 </Link>
                 <Link
                   href={`/analysis/${session.id}?compare=true`}
-                  className="flex h-8 items-center gap-1.5 bg-[color:var(--color-accent)] px-2.5 text-xs font-semibold text-[color:var(--color-ink)]"
+                  className="flex h-8 items-center gap-1.5 bg-accent px-2.5 text-xs font-semibold text-bg"
                 >
                   <Columns2 className="size-3.5" />
                   Compare
@@ -253,9 +253,9 @@ function ReferenceTable({
 }) {
   if (references.length === 0) {
     return (
-      <p className="px-3 py-6 text-sm text-[color:var(--color-muted)]">
+      <p className="px-3 py-6 text-sm text-text-muted">
         No references yet. Import a clip from the{" "}
-        <Link href="/" className="text-[color:var(--color-accent)] underline">
+        <Link href="/" className="text-accent underline">
           home screen
         </Link>{" "}
         and turn on &ldquo;Save as reference&rdquo; to compare your swing against it.
@@ -264,7 +264,7 @@ function ReferenceTable({
   }
 
   return (
-    <div className="divide-y divide-[color:var(--color-border)]">
+    <div className="divide-y divide-border">
       {references.map((video) => (
         <article
           key={video.id}
@@ -278,20 +278,20 @@ function ReferenceTable({
                 label="reference"
                 onSave={(title) => void actions.renameVideo(video.id, title)}
               />
-              <p className="mt-1 truncate text-xs text-[color:var(--color-muted)]">
+              <p className="mt-1 truncate text-xs text-text-muted">
                 Added {formatDate(video.createdAt)}
               </p>
             </div>
           </div>
-          <p className="text-sm text-[color:var(--color-muted)]">{video.clubTag}</p>
-          <p className="text-sm text-[color:var(--color-muted)]">
+          <p className="text-sm text-text-muted">{video.clubTag}</p>
+          <p className="text-sm text-text-muted">
             {video.orientation === "down-the-line" ? "Down line" : "Face-on"}
           </p>
-          <p className="font-mono text-xs text-[color:var(--color-muted)]">{video.fps ?? 60} fps</p>
+          <p className="font-mono text-xs text-text-muted">{video.fps ?? 60} fps</p>
           <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
             <Link
               href={`/analysis/${compareSessionId}?compare=true&ref=${encodeURIComponent(video.id)}`}
-              className="flex h-8 items-center gap-1.5 bg-[color:var(--color-accent)] px-2.5 text-xs font-semibold text-[color:var(--color-ink)]"
+              className="flex h-8 items-center gap-1.5 bg-accent px-2.5 text-xs font-semibold text-bg"
             >
               <Columns2 className="size-3.5" />
               Add to compare
@@ -310,7 +310,7 @@ function ReferenceTable({
 
 function VideoThumbnail({ video }: { video?: VideoAsset }) {
   return (
-    <div className="relative flex aspect-video w-28 shrink-0 items-center justify-center overflow-hidden bg-black text-[color:var(--color-accent)]">
+    <div className="relative flex aspect-video w-28 shrink-0 items-center justify-center overflow-hidden bg-bg text-accent">
       {video?.thumbnailUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={video.thumbnailUrl} alt="" className="h-full w-full object-cover opacity-85" />
@@ -318,7 +318,7 @@ function VideoThumbnail({ video }: { video?: VideoAsset }) {
         <FileVideo className="size-5" />
       )}
       {video ? (
-        <span className="absolute bottom-1 right-1 bg-black/75 px-1.5 py-0.5 font-mono text-[10px] text-white">
+        <span className="absolute bottom-1 right-1 bg-bg/75 px-1.5 py-0.5 font-mono text-xs text-text">
           {formatDuration(video.duration)}
         </span>
       ) : null}

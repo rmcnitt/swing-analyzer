@@ -79,6 +79,7 @@ import { autoGolferBox, autoSwingPositions } from "@/lib/pose/derived";
 import { AVERAGE_HEIGHT_INCHES, clampHeight } from "@/lib/pose/swing-check";
 import type { PlaybackProblem } from "@/lib/video/playback-errors";
 import { createVideoThumbnail, detectVideoFps, readVideoMetadata, type VideoFileMetadata } from "@/lib/video/media";
+import { DEFAULT_ANNOTATION_COLOR } from "@/lib/design/tokens";
 
 interface AnalysisWorkspaceProps {
   sessionId: string;
@@ -129,22 +130,22 @@ export function AnalysisWorkspace({ sessionId, seedSession, ...rest }: AnalysisW
   }
 
   return (
-    <div className="flex h-screen flex-col items-center justify-center gap-3 bg-[#07080a] px-4 text-center text-white">
+    <div className="flex h-screen flex-col items-center justify-center gap-3 bg-bg px-4 text-center text-text">
       {loadState.status === "loading" ? (
-        <p className="text-sm text-[color:var(--color-muted)]">Loading session…</p>
+        <p className="text-sm text-text-muted">Loading session…</p>
       ) : (
         <>
           <h1 className="text-base font-semibold">
             {loadState.status === "missing" ? "Session not found" : "This session couldn't be read"}
           </h1>
-          <p className="max-w-sm text-sm text-[color:var(--color-muted)]">
+          <p className="max-w-sm text-sm text-text-muted">
             {loadState.status === "missing"
               ? "It may have been deleted, or it was saved in a different browser. Sessions live only in the browser where they were created."
               : "The saved data is damaged. A backup copy was kept in this browser's storage."}
           </p>
           <Link
             href="/"
-            className="mt-2 flex h-9 items-center bg-[color:var(--color-accent)] px-3 text-sm font-semibold text-[color:var(--color-ink)]"
+            className="mt-2 flex h-9 items-center bg-accent px-3 text-sm font-semibold text-bg"
           >
             Back to swings
           </Link>
@@ -217,7 +218,7 @@ function WorkspaceView({
     () => (loadUiPreference("active-tool") as AnnotationTool | null) ?? "line",
   );
   const [activeColor, setActiveColor] = useState<HexColor>(
-    () => loadUiPreference("active-color") ?? "#f97316",
+    () => loadUiPreference("active-color") ?? DEFAULT_ANNOTATION_COLOR,
   );
   const [strokeWidth, setStrokeWidth] = useState(() => {
     const saved = Number(loadUiPreference("stroke-width"));
@@ -887,19 +888,19 @@ function WorkspaceView({
 
 
   return (
-    <div className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-[#07080a] text-white">
-      <header className="flex h-11 shrink-0 items-center justify-between border-b border-[color:var(--color-border)] bg-[#101113] px-2.5">
+    <div className="flex h-dvh min-h-[480px] flex-col overflow-hidden bg-bg text-text">
+      <header className="flex h-11 shrink-0 items-center justify-between border-b border-border bg-surface-1 px-2.5">
         <div className="flex min-w-0 items-center gap-3">
           <Link
             href="/"
-            className="flex size-8 shrink-0 items-center justify-center bg-[color:var(--color-accent)] text-[color:var(--color-ink)]"
+            className="flex size-8 shrink-0 items-center justify-center bg-accent text-bg"
             aria-label="Home"
           >
-            <span className="text-sm font-black">SA</span>
+            <span className="text-sm font-semibold">SA</span>
           </Link>
           <div className="min-w-0">
-            <h1 className="truncate text-sm font-semibold text-white">{session.title}</h1>
-            <p className="truncate text-[10px] uppercase tracking-[0.16em] text-[color:var(--color-muted)]">
+            <h1 className="truncate text-sm font-semibold text-text">{session.title}</h1>
+            <p className="truncate text-xs uppercase tracking-caps text-text-muted">
               {session.syncEnabled ? "Sync enabled" : "Independent panes"} / Active{" "}
               {effectiveActivePaneId}
             </p>
@@ -907,7 +908,7 @@ function WorkspaceView({
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="hidden font-mono text-xs text-[color:var(--color-muted)] sm:inline">
+          <span className="hidden font-mono text-xs text-text-muted sm:inline">
             {lastSavedAt
               ? `Saved ${new Date(lastSavedAt).toLocaleTimeString([], {
                   hour: "numeric",
@@ -920,8 +921,8 @@ function WorkspaceView({
             onClick={() => handleSetCompareMode(!compareMode)}
             className={`flex h-8 items-center gap-2 border px-2.5 text-xs ${
               compareMode
-                ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/14 text-white"
-                : "border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:border-white/20 hover:text-white"
+                ? "border-accent bg-accent-dim text-text"
+                : "border-border text-text-muted hover:border-border-strong hover:text-text"
             }`}
           >
             <Columns2 className="size-3.5" />
@@ -929,7 +930,7 @@ function WorkspaceView({
           </button>
           <Link
             href="/library"
-            className="flex h-8 items-center gap-2 border border-[color:var(--color-border)] px-2.5 text-xs text-[color:var(--color-muted)] hover:border-white/20 hover:text-white"
+            className="flex h-8 items-center gap-2 border border-border px-2.5 text-xs text-text-muted hover:border-border-strong hover:text-text"
           >
             <LibraryBig className="size-3.5" />
             <span className="hidden sm:inline">Library</span>
@@ -937,7 +938,7 @@ function WorkspaceView({
           <button
             type="button"
             onClick={handleManualSave}
-            className="flex h-8 items-center gap-2 bg-[color:var(--color-accent)] px-2.5 text-xs font-semibold text-[color:var(--color-ink)]"
+            className="flex h-8 items-center gap-2 bg-accent px-2.5 text-xs font-semibold text-bg"
           >
             <Save className="size-3.5" />
             <span className="hidden sm:inline">Save</span>
@@ -945,7 +946,7 @@ function WorkspaceView({
           <button
             type="button"
             onClick={() => void handleExportFrame()}
-            className="flex h-8 items-center gap-2 border border-[color:var(--color-border)] px-2.5 text-xs text-[color:var(--color-muted)] hover:border-white/20 hover:text-white"
+            className="flex h-8 items-center gap-2 border border-border px-2.5 text-xs text-text-muted hover:border-border-strong hover:text-text"
             title={compareMode ? "Export both frames with drawings as PNG (E)" : "Export frame with drawings as PNG (E)"}
           >
             <ImageDown className="size-3.5" />
@@ -954,7 +955,7 @@ function WorkspaceView({
           <button
             type="button"
             onClick={() => setShortcutsOpen(true)}
-            className="hidden size-8 items-center justify-center border border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:border-white/20 hover:text-white md:flex"
+            className="hidden size-8 items-center justify-center border border-border text-text-muted hover:border-border-strong hover:text-text md:flex"
             aria-label="Keyboard shortcuts"
             title="Keyboard shortcuts (?)"
           >
@@ -963,7 +964,7 @@ function WorkspaceView({
           <button
             type="button"
             onClick={() => setInspectorOpen((current) => !current)}
-            className="flex size-8 items-center justify-center border border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:border-white/20 hover:text-white"
+            className="flex size-8 items-center justify-center border border-border text-text-muted hover:border-border-strong hover:text-text"
             aria-label={inspectorOpen ? "Hide inspector" : "Show inspector"}
           >
             {inspectorOpen ? (
@@ -1085,11 +1086,11 @@ function WorkspaceView({
         {inspectorOpen ? (
           <>
             <div
-              className="fixed inset-0 z-30 bg-black/50 xl:hidden"
+              className="fixed inset-0 z-30 bg-bg/50 xl:hidden"
               onClick={() => setInspectorOpen(false)}
               aria-hidden="true"
             />
-            <div className="fixed inset-y-0 right-0 z-40 w-[300px] max-w-[85vw] shadow-2xl xl:static xl:z-auto xl:max-w-none xl:shrink-0 xl:shadow-none">
+            <div className="fixed inset-y-0 right-0 z-40 w-[300px] max-w-[85vw] xl:static xl:z-auto xl:max-w-none xl:shrink-0">
               <SessionSidebar
                 onClose={() => setInspectorOpen(false)}
                 sessionTitle={session.title}

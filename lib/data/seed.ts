@@ -1,3 +1,4 @@
+import { color } from "@/lib/design/tokens";
 import type { AnalysisSession, PaneId, SnapshotMarker, VideoAsset } from "@/lib/types";
 
 // Bundled sample content so first-time visitors can try the workspace without uploading.
@@ -93,7 +94,7 @@ export const sampleSessions: AnalysisSession[] = [
           paneId: "primary",
           type: "circle",
           geometry: { kind: "circle", center: { x: 0.49, y: 0.27 }, radius: 0.07 },
-          style: { stroke: "#f97316", strokeWidth: 3, opacity: 1 },
+          style: { stroke: color.accent, strokeWidth: 3, opacity: 1 },
           label: "Head position",
           zIndex: 1,
         },

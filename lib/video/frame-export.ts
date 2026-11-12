@@ -1,3 +1,5 @@
+import { color } from "@/lib/design/tokens";
+
 /** A captured pane frame (video + drawings) and the caption printed under it. */
 export interface FrameCapture {
   canvas: HTMLCanvasElement;
@@ -67,13 +69,13 @@ export function composeCaptures(captures: FrameCapture[]) {
     throw new Error("Canvas 2D is unavailable");
   }
 
-  context.fillStyle = "#07080a";
+  context.fillStyle = color.bg;
   context.fillRect(0, 0, output.width, output.height);
 
   captures.forEach(({ canvas, caption }, index) => {
     const tile = layout.tiles[index];
     context.drawImage(canvas, tile.x, tile.y, tile.width, tile.height);
-    context.fillStyle = "#e5e7eb";
+    context.fillStyle = color.text;
     context.font = "600 18px ui-sans-serif, system-ui, sans-serif";
     context.textBaseline = "middle";
     context.fillText(caption, tile.x + 12, tile.height + layout.captionHeight / 2, tile.width - 24);

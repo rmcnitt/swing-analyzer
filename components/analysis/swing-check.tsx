@@ -128,9 +128,9 @@ interface SwingChecksPanelProps {
   onClose: () => void;
 }
 
-const muted = "text-[color:var(--color-muted)]";
-const good = "text-emerald-300";
-const warn = "text-amber-300";
+const muted = "text-text-muted";
+const good = "text-good";
+const warn = "text-warn";
 
 /**
  * The per-pane "Swing checks" panel: a compact card in the top-left of the video (usually sky or
@@ -193,8 +193,8 @@ export function SwingChecksPanel({
     body = (
       <div className="flex items-center gap-2 px-2.5 py-2">
         <span className={muted}>Analyzing swing… {Math.round(pose.progress * 100)}%</span>
-        <div className="h-1 flex-1 bg-white/10">
-          <div className="h-full bg-[color:var(--color-accent)]" style={{ width: `${pose.progress * 100}%` }} />
+        <div className="h-1 flex-1 bg-border">
+          <div className="h-full bg-accent" style={{ width: `${pose.progress * 100}%` }} />
         </div>
       </div>
     );
@@ -209,7 +209,7 @@ export function SwingChecksPanel({
         <button
           type="button"
           onClick={onAnalyze}
-          className="ml-auto h-6 shrink-0 bg-[color:var(--color-accent)] px-2 text-[12px] font-medium text-[color:var(--color-ink)]"
+          className="ml-auto h-6 shrink-0 bg-accent px-2 text-xs font-medium text-bg"
         >
           {pose.status === "error" ? "Try again" : "Analyze swing"}
         </button>
@@ -237,8 +237,8 @@ export function SwingChecksPanel({
 
     body = (
       <>
-        <div className={cn(GRID, "border-b border-white/10")} role="group" aria-label="Jump to position">
-          <span className={cn("self-center pl-2.5 text-[10px] uppercase tracking-[0.12em]", muted)}>Jump to</span>
+        <div className={cn(GRID, "border-b border-border")} role="group" aria-label="Jump to position">
+          <span className={cn("self-center pl-2.5 text-xs uppercase tracking-caps", muted)}>Jump to</span>
           {JUMPS.map(([label, key]) => {
             const at = positions.get(key);
 
@@ -250,10 +250,10 @@ export function SwingChecksPanel({
                 onClick={() => onJump(label)}
                 aria-pressed={current === key}
                 className={cn(
-                  "h-8 text-[12px] pointer-coarse:h-9 disabled:opacity-35",
+                  "h-8 text-xs pointer-coarse:h-9 disabled:opacity-35",
                   current === key
-                    ? "bg-[color:var(--color-accent)] font-medium text-[color:var(--color-ink)]"
-                    : "text-white/80 hover:bg-white/[0.08] hover:text-white",
+                    ? "bg-accent font-medium text-bg"
+                    : "text-text hover:bg-surface-2 hover:text-text",
                 )}
                 title={at === undefined ? `Mark ${label} first` : `Jump to ${label}`}
               >
@@ -263,7 +263,7 @@ export function SwingChecksPanel({
           })}
         </div>
 
-        <ul className="divide-y divide-white/[0.06]">
+        <ul className="divide-y divide-border">
           {rows
             .filter(({ folded }) => !folded)
             .map(({ check, content }) => (
@@ -279,7 +279,7 @@ export function SwingChecksPanel({
         </ul>
 
         {folded.length > 0 ? (
-          <p className={cn("border-t border-white/10 px-2.5 py-1.5 leading-4", muted)} title={DOWN_THE_LINE_TITLE}>
+          <p className={cn("border-t border-border px-2.5 py-1.5 leading-4", muted)} title={DOWN_THE_LINE_TITLE}>
             {folded.join(", ")} {folded.length === 1 ? "needs" : "need"} a down-the-line video
           </p>
         ) : null}
@@ -293,9 +293,9 @@ export function SwingChecksPanel({
     <div
       ref={panelRef}
       className={cn(
-        "absolute z-10 w-[min(17rem,calc(100%-1rem))] border border-white/10 bg-black/75 text-[12px] text-white shadow-lg backdrop-blur-sm",
+        "absolute z-10 w-[min(17rem,calc(100%-1rem))] overflow-hidden rounded-panel border border-border bg-surface-1 text-xs text-text shadow-float",
         CORNER_CLASSES[corner],
-        drag ? "opacity-90 shadow-2xl" : null,
+        drag ? "opacity-90" : null,
       )}
       style={drag ? { transform: `translate(${drag.dx}px, ${drag.dy}px)` } : undefined}
       // Keep clicks here from panning or drawing on the video underneath.
@@ -325,13 +325,13 @@ export function SwingChecksPanel({
         onPointerUp={endDrag}
         onPointerCancel={() => setDrag(null)}
       >
-        <Gauge className="size-3.5 shrink-0 text-[color:var(--color-accent)]" aria-hidden />
-        <span className="select-none text-[11px] font-medium uppercase tracking-[0.14em]">Swing checks</span>
+        <Gauge className="size-3.5 shrink-0 text-accent" aria-hidden />
+        <span className="select-none text-xs font-medium uppercase tracking-caps">Swing checks</span>
         <GripHorizontal className={cn("size-3.5", muted)} aria-hidden />
         <button
           type="button"
           onClick={() => setCollapsed((value) => !value)}
-          className={cn("ml-auto flex size-6 items-center justify-center hover:bg-white/[0.08] hover:text-white", muted)}
+          className={cn("ml-auto flex size-6 items-center justify-center hover:bg-surface-2 hover:text-text", muted)}
           aria-label={collapsed ? "Expand swing checks" : "Collapse swing checks"}
           aria-expanded={!collapsed}
         >
@@ -340,7 +340,7 @@ export function SwingChecksPanel({
         <button
           type="button"
           onClick={onClose}
-          className={cn("flex size-6 items-center justify-center hover:bg-white/[0.08] hover:text-white", muted)}
+          className={cn("flex size-6 items-center justify-center hover:bg-surface-2 hover:text-text", muted)}
           aria-label="Close swing checks"
           title="Close swing checks"
         >
@@ -348,7 +348,7 @@ export function SwingChecksPanel({
         </button>
       </div>
 
-      {collapsed ? null : <div className="border-t border-white/10">{body}</div>}
+      {collapsed ? null : <div className="border-t border-border">{body}</div>}
     </div>
   );
 }
@@ -397,18 +397,18 @@ function CheckRow({
         <span
           className={cn(
             "relative h-3 w-5 shrink-0 rounded-full transition-colors",
-            on ? "bg-[color:var(--color-accent)]" : "bg-white/15",
+            on ? "bg-accent" : "bg-border-strong",
           )}
           aria-hidden
         >
           <span
             className={cn(
-              "absolute top-0.5 size-2 rounded-full bg-white transition-[left]",
+              "absolute top-0.5 size-2 rounded-full bg-text transition-[left]",
               on ? "left-2.5" : "left-0.5",
             )}
           />
         </span>
-        <span className={cn("whitespace-nowrap", on ? "text-white" : muted)}>{label}</span>
+        <span className={cn("whitespace-nowrap", on ? "text-text" : muted)}>{label}</span>
       </button>
       {!on || "needsDownTheLine" in content ? null : "line" in content ? (
         <div className="col-span-3 flex items-center px-2 leading-4" title={content.title}>
@@ -419,8 +419,8 @@ function CheckRow({
           <div
             key={JUMPS[index][1]}
             className={cn(
-              "flex flex-col items-center justify-center whitespace-nowrap px-0.5 py-1 text-center leading-[15px] tabular-nums",
-              current === JUMPS[index][1] ? "bg-white/[0.06]" : null,
+              "flex flex-col items-center justify-center whitespace-nowrap px-0.5 py-1 text-center leading-4 tabular-nums",
+              current === JUMPS[index][1] ? "bg-surface-2" : null,
               cell?.tone ? toneClass[cell.tone] : null,
             )}
             title={cell?.title}
@@ -477,7 +477,7 @@ function tempoRow(tempo: Tempo | null): RowContent {
     title: `Backswing ÷ downswing (${tempo.backswing.toFixed(2)}s back, ${tempo.downswing.toFixed(2)}s down). Tour players average about ${TOUR_TEMPO} : 1.`,
     line: (
       <span>
-        <span className="font-mono text-[13px]">{tempo.ratio.toFixed(1)} : 1</span>{" "}
+        <span className="font-mono text-sm">{tempo.ratio.toFixed(1)} : 1</span>{" "}
         <span className={muted}>
           {tempo.backswing.toFixed(2)}s / {tempo.downswing.toFixed(2)}s
         </span>
@@ -611,7 +611,7 @@ function HeightField({ height, onSetHeight }: { height: GolferHeight; onSetHeigh
           setEditing(true);
         }}
         className={cn(
-          "flex w-full items-center gap-1.5 border-t border-white/10 px-2.5 py-1.5 text-left hover:text-white pointer-coarse:min-h-9",
+          "flex w-full items-center gap-1.5 border-t border-border px-2.5 py-1.5 text-left hover:text-text pointer-coarse:min-h-9",
           muted,
         )}
         title={
@@ -620,7 +620,7 @@ function HeightField({ height, onSetHeight }: { height: GolferHeight; onSetHeigh
             : "This clip's golfer, to turn movement into inches"
         }
       >
-        {who} <span className="text-white">{formatHeight(height.inches)}</span>
+        {who} <span className="text-text">{formatHeight(height.inches)}</span>
         <Pencil className="size-3" aria-hidden />
       </button>
     );
@@ -636,11 +636,11 @@ function HeightField({ height, onSetHeight }: { height: GolferHeight; onSetHeigh
     setEditing(false);
   };
   const field =
-    "h-6 w-9 border border-white/15 bg-black/60 px-1 text-center text-[12px] text-white outline-none focus:border-[color:var(--color-accent)] pointer-coarse:h-9";
+    "h-6 w-9 border border-border bg-bg px-1 text-center text-xs text-text focus:border-border-strong pointer-coarse:h-9";
 
   return (
     <form
-      className="flex items-center gap-1 border-t border-white/10 px-2.5 py-1.5"
+      className="flex items-center gap-1 border-t border-border px-2.5 py-1.5"
       onSubmit={(event) => {
         event.preventDefault();
         save();
@@ -674,7 +674,7 @@ function HeightField({ height, onSetHeight }: { height: GolferHeight; onSetHeigh
       <span className={muted}>in</span>
       <button
         type="submit"
-        className="ml-auto flex size-6 items-center justify-center bg-[color:var(--color-accent)] text-[color:var(--color-ink)] pointer-coarse:size-9"
+        className="ml-auto flex size-6 items-center justify-center bg-accent text-bg pointer-coarse:size-9"
         aria-label="Save height"
       >
         <Check className="size-3.5" />

@@ -717,18 +717,18 @@ export function VideoPane({
         // @container: controls adapt to the pane's own width (half the screen when comparing).
         "@container flex min-h-0 flex-col border transition",
         isActive
-          ? "border-[color:var(--color-accent)] bg-[#111214]"
-          : "border-[color:var(--color-border)] bg-[#0d0e10]",
+          ? "border-accent bg-surface-1"
+          : "border-border bg-surface-1",
       )}
       onClick={() => onActivate(pane.id)}
     >
-      <div className="flex min-h-10 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-[color:var(--color-border)] bg-[#141517] px-2.5 py-1">
+      <div className="flex min-h-10 flex-wrap items-center justify-between gap-x-2 gap-y-1 border-b border-border bg-surface-1 px-2.5 py-1">
         <div className="min-w-0 flex-1 basis-40">
           <div className="flex items-center gap-2">
             <span
               className={cn(
                 "h-2 w-2",
-                isActive ? "bg-[color:var(--color-accent)]" : "bg-white/25",
+                isActive ? "bg-accent" : "bg-text-faint",
               )}
             />
             {isRenaming && video ? (
@@ -746,12 +746,12 @@ export function VideoPane({
                     setIsRenaming(false);
                   }
                 }}
-                className="h-7 min-w-48 border border-[color:var(--color-accent)] bg-black/60 px-2 text-xs font-medium text-white outline-none"
+                className="h-7 min-w-48 border border-accent bg-bg px-2 text-xs font-medium text-text"
                 autoFocus
                 aria-label="Rename video"
               />
             ) : (
-              <p className="truncate text-xs font-medium text-white">
+              <p className="truncate text-xs font-medium text-text">
                 {getVideoLabel(video?.title)}
               </p>
             )}
@@ -767,7 +767,7 @@ export function VideoPane({
                   setDraftTitle(video?.title ?? "");
                   setIsRenaming(true);
                 }}
-                className="flex size-6 items-center justify-center text-[color:var(--color-muted)] hover:bg-white/[0.06] hover:text-white"
+                className="flex size-6 items-center justify-center text-text-muted hover:bg-surface-2 hover:text-text"
                 title={isRenaming ? "Save name" : "Rename video"}
                 aria-label={isRenaming ? "Save video name" : "Rename video"}
               >
@@ -775,12 +775,12 @@ export function VideoPane({
               </button>
             ) : null}
             {compareMode && isComparisonPane ? (
-              <span className="border border-white/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-[color:var(--color-muted)]">
+              <span className="border border-border px-1.5 py-0.5 text-xs uppercase tracking-caps text-text-muted">
                 Compare
               </span>
             ) : null}
           </div>
-          <p className="mt-0.5 hidden truncate text-[10px] uppercase tracking-[0.14em] text-[color:var(--color-muted)] @sm:block">
+          <p className="mt-0.5 hidden truncate text-xs uppercase tracking-caps text-text-muted @sm:block">
             {video
               ? `${pane.label} / ${video.clubTag} / ${video.orientation}`
               : isComparisonPane
@@ -790,23 +790,23 @@ export function VideoPane({
         </div>
 
         <div className="flex min-w-fit items-center gap-2">
-          <div className="hidden items-center gap-0.5 border border-[color:var(--color-border)] bg-black/25 p-0.5 @sm:flex">
+          <div className="hidden items-center gap-0.5 rounded-control border border-border bg-bg/25 p-0.5 @sm:flex">
             <button
               type="button"
               onClick={() => updateZoom(zoom - 0.25)}
-              className="flex size-[26px] items-center justify-center text-[color:var(--color-muted)] hover:bg-white/[0.06] hover:text-white"
+              className="flex size-[26px] items-center justify-center text-text-muted hover:bg-surface-2 hover:text-text"
               aria-label="Zoom out"
               title="Zoom out"
             >
               <Minus className="size-3.5" />
             </button>
-            <span className="w-9 text-center font-mono text-[10px] text-[color:var(--color-muted)]">
+            <span className="w-9 text-center font-mono text-xs text-text-muted">
               {Math.round(zoom * 100)}%
             </span>
             <button
               type="button"
               onClick={() => updateZoom(zoom + 0.25)}
-              className="flex size-[26px] items-center justify-center text-[color:var(--color-muted)] hover:bg-white/[0.06] hover:text-white"
+              className="flex size-[26px] items-center justify-center text-text-muted hover:bg-surface-2 hover:text-text"
               aria-label="Zoom in"
               title="Zoom in"
             >
@@ -815,7 +815,7 @@ export function VideoPane({
             <button
               type="button"
               onClick={resetZoom}
-              className="flex size-[26px] items-center justify-center text-[color:var(--color-muted)] hover:bg-white/[0.06] hover:text-white"
+              className="flex size-[26px] items-center justify-center text-text-muted hover:bg-surface-2 hover:text-text"
               aria-label="Reset zoom"
               title="Reset zoom"
             >
@@ -827,10 +827,10 @@ export function VideoPane({
               disabled={!video}
               aria-pressed={Boolean(pane.fitGolfer && golferBox)}
               className={cn(
-                "flex h-[26px] items-center gap-1 px-1.5 text-[10px] uppercase tracking-[0.1em] disabled:opacity-40",
+                "flex h-[26px] items-center gap-1 px-1.5 text-xs uppercase tracking-caps disabled:opacity-40",
                 pane.fitGolfer && golferBox
-                  ? "bg-[color:var(--color-accent)]/20 text-white"
-                  : "text-[color:var(--color-muted)] hover:bg-white/[0.06] hover:text-white",
+                  ? "bg-accent-dim text-text"
+                  : "text-text-muted hover:bg-surface-2 hover:text-text",
               )}
               aria-label="Fit golfer"
               title={
@@ -846,7 +846,7 @@ export function VideoPane({
               <button
                 type="button"
                 onClick={() => setBoxMode(true)}
-                className="flex size-[26px] items-center justify-center text-[color:var(--color-muted)] hover:bg-white/[0.06] hover:text-white"
+                className="flex size-[26px] items-center justify-center text-text-muted hover:bg-surface-2 hover:text-text"
                 aria-label="Redraw golfer box"
                 title="Redraw golfer box"
               >
@@ -856,7 +856,7 @@ export function VideoPane({
           </div>
 
           <label
-            className="cursor-pointer border border-[color:var(--color-border)] px-2 py-1.5 text-xs text-white hover:border-[color:var(--color-accent)]"
+            className="cursor-pointer border border-border px-2 py-1.5 text-xs text-text hover:border-accent"
             title="Upload a clip into this pane"
           >
             <span className="inline-flex items-center gap-2">
@@ -880,7 +880,7 @@ export function VideoPane({
           <select
             value={pane.videoId ?? ""}
             onChange={(event) => onSelectVideo(pane.id, event.target.value)}
-            className="max-w-36 border border-[color:var(--color-border)] bg-[#0b0c0e] px-2 py-1.5 text-xs text-white outline-none @lg:max-w-52"
+            className="max-w-36 border border-border bg-bg px-2 py-1.5 text-xs text-text @lg:max-w-52"
             aria-label="Clip in this pane"
           >
             <option value="">Choose saved swing</option>
@@ -904,11 +904,11 @@ export function VideoPane({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-black">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-bg">
         <div
           ref={mediaViewportRef}
           className={cn(
-            "relative min-h-[120px] w-full flex-1 touch-none overflow-hidden bg-black",
+            "relative min-h-[120px] w-full flex-1 touch-none overflow-hidden bg-bg",
             canPan ? "cursor-grab active:cursor-grabbing" : null,
           )}
           onWheel={handleWheel}
@@ -931,7 +931,7 @@ export function VideoPane({
               <div
                 // Video and Konva overlay are transformed together so normalized annotations stay
                 // aligned; the canvas maps pointer positions back through this transform.
-                className="relative overflow-hidden bg-black"
+                className="relative overflow-hidden bg-bg"
                 style={{
                   width: `${stageSize.width}px`,
                   height: `${stageSize.height}px`,
@@ -1076,18 +1076,18 @@ export function VideoPane({
               ) : null}
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center px-6 text-center text-sm text-[color:var(--color-muted)]">
+            <div className="flex h-full items-center justify-center px-6 text-center text-sm text-text-muted">
               Load a swing clip
             </div>
           )}
         </div>
 
-        <div className="shrink-0 border-t border-[color:var(--color-border)] bg-[#141517] px-2.5 py-1.5">
+        <div className="shrink-0 border-t border-border bg-surface-1 px-2.5 py-1.5">
           <div className="flex flex-wrap items-center gap-2 @md:flex-nowrap">
             <button
               type="button"
               onClick={togglePlayback}
-              className="flex size-8 shrink-0 items-center justify-center bg-[color:var(--color-accent)] text-[color:var(--color-ink)] pointer-coarse:size-10"
+              className="flex size-8 shrink-0 items-center justify-center bg-accent text-bg pointer-coarse:size-10"
               aria-label={isPlaying ? "Pause" : "Play"}
             >
               {isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
@@ -1096,7 +1096,7 @@ export function VideoPane({
             <button
               type="button"
               onClick={() => stepBy(-1)}
-              className="flex size-8 shrink-0 items-center justify-center border border-[color:var(--color-border)] text-white hover:border-white/25 pointer-coarse:size-10"
+              className="flex size-8 shrink-0 items-center justify-center border border-border text-text hover:border-border-strong pointer-coarse:size-10"
               aria-label="Step back one frame"
             >
               <SkipBack className="size-4" />
@@ -1105,7 +1105,7 @@ export function VideoPane({
             <button
               type="button"
               onClick={() => stepBy(1)}
-              className="flex size-8 shrink-0 items-center justify-center border border-[color:var(--color-border)] text-white hover:border-white/25 pointer-coarse:size-10"
+              className="flex size-8 shrink-0 items-center justify-center border border-border text-text hover:border-border-strong pointer-coarse:size-10"
               aria-label="Step forward one frame"
             >
               <SkipForward className="size-4" />
@@ -1119,8 +1119,8 @@ export function VideoPane({
               className={cn(
                 "flex size-8 shrink-0 items-center justify-center border disabled:opacity-40 pointer-coarse:size-10",
                 loop
-                  ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/14 text-white"
-                  : "border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:border-white/25 hover:text-white",
+                  ? "border-accent bg-accent-dim text-text"
+                  : "border-border text-text-muted hover:border-border-strong hover:text-text",
               )}
               aria-label={loop ? "Stop looping" : "Loop"}
               title={loop ? "Stop looping (R)" : "Loop a range (R); drag the in/out handles or press [ and ]"}
@@ -1136,8 +1136,8 @@ export function VideoPane({
               className={cn(
                 "flex size-8 shrink-0 items-center justify-center border disabled:opacity-40 pointer-coarse:size-10",
                 swingCheckOn
-                  ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/14 text-white"
-                  : "border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:border-white/25 hover:text-white",
+                  ? "border-accent bg-accent-dim text-text"
+                  : "border-border text-text-muted hover:border-border-strong hover:text-text",
               )}
               aria-label={swingCheckOn ? "Hide swing check" : "Swing check"}
               title="Swing check: tempo, hand path and head movement"
@@ -1168,7 +1168,7 @@ export function VideoPane({
               <select
                 value={video.fps ?? DEFAULT_FPS}
                 onChange={(event) => onSetVideoFps(video.id, Number(event.target.value), "manual")}
-                className="hidden h-8 border border-[color:var(--color-border)] bg-[#0b0c0e] px-1.5 font-mono text-xs text-white outline-none @3xl:block"
+                className="hidden h-8 border border-border bg-bg px-1.5 font-mono text-xs text-text @3xl:block"
                 aria-label="Clip frame rate"
                 title={
                   video.fpsSource === "detected"
@@ -1187,7 +1187,7 @@ export function VideoPane({
             <select
               value={pane.playbackRate}
               onChange={(event) => onChangeRate(pane.id, Number(event.target.value))}
-              className="h-8 border border-[color:var(--color-border)] bg-[#0b0c0e] px-2 font-mono text-xs text-white outline-none pointer-coarse:h-10"
+              className="h-8 border border-border bg-bg px-2 font-mono text-xs text-text pointer-coarse:h-10"
               aria-label="Playback speed"
             >
               {SPEED_OPTIONS.map((speed) => (
@@ -1248,7 +1248,7 @@ function PlaybackTransport({
           step={frameDuration(fps)}
           value={Math.min(currentTime, duration || 0)}
           onChange={(event) => onSeek(Number(event.target.value))}
-          className="h-1.5 w-full cursor-pointer appearance-none bg-white/15 accent-[color:var(--color-accent)]"
+          className="h-1.5 w-full cursor-pointer appearance-none bg-border-strong accent-accent"
           aria-label="Scrub video"
         />
         <Timeline
@@ -1261,9 +1261,9 @@ function PlaybackTransport({
         />
       </div>
 
-      <p className="hidden min-w-32 text-right font-mono text-xs text-[color:var(--color-muted)] @2xl:block">
+      <p className="hidden min-w-32 text-right font-mono text-xs text-text-muted @2xl:block">
         {formatTimecode(currentTime)} / {formatTimecode(duration)}
-        <span className="ml-1.5 text-[10px] opacity-70">F{frameIndexAt(currentTime, fps)}</span>
+        <span className="ml-1.5 text-xs opacity-70">F{frameIndexAt(currentTime, fps)}</span>
       </p>
     </>
   );
@@ -1305,12 +1305,12 @@ function PoseButton({
       aria-label={analyzing ? "Cancel pose analysis" : visible ? "Hide pose" : "Show pose"}
       title={title}
       className={cn(
-        "flex h-8 shrink-0 items-center justify-center gap-1 border px-2 font-mono text-[11px] disabled:opacity-40 pointer-coarse:h-10",
+        "flex h-8 shrink-0 items-center justify-center gap-1 border px-2 font-mono text-xs disabled:opacity-40 pointer-coarse:h-10",
         visible || analyzing
-          ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/14 text-white"
+          ? "border-accent bg-accent-dim text-text"
           : status === "error"
-            ? "border-red-500/60 text-red-300"
-            : "border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:border-white/25 hover:text-white",
+            ? "border-bad/60 text-bad"
+            : "border-border text-text-muted hover:border-border-strong hover:text-text",
       )}
     >
       <PersonStanding className="size-4" />

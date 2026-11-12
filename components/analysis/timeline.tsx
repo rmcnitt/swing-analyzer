@@ -46,15 +46,15 @@ export function Timeline({ currentTime, duration, markers, loop, onSeek, onLoopC
   return (
     <div className="min-w-0 flex-1">
       <div ref={trackRef} className="relative h-5">
-        <div className="absolute left-0 right-0 top-2 h-px bg-white/15" />
+        <div className="absolute left-0 right-0 top-2 h-px bg-border-strong" />
         {loop ? (
           <div
-            className="absolute top-1 h-2 bg-[color:var(--color-accent)]/25"
+            className="absolute top-1 h-2 bg-accent-dim"
             style={{ left: `${percent(loop.start)}%`, width: `${percent(loop.end) - percent(loop.start)}%` }}
           />
         ) : null}
         <div
-          className="absolute left-0 top-2 h-px bg-[color:var(--color-accent)]"
+          className="absolute left-0 top-2 h-px bg-accent"
           style={{ width: `${progress}%` }}
         />
         {markers.map((marker) => {
@@ -65,10 +65,10 @@ export function Timeline({ currentTime, duration, markers, loop, onSeek, onLoopC
               key={marker.id}
               type="button"
               onClick={() => onSeek(marker.time)}
-              className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 border border-black/60 hover:bg-[color:var(--color-accent)] ${
+              className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 border border-bg/60 hover:bg-accent ${
                 isActive
-                  ? "size-2.5 bg-[color:var(--color-accent)]"
-                  : "size-1.5 bg-white/55"
+                  ? "size-2.5 bg-accent"
+                  : "size-1.5 bg-text-muted"
               }`}
               style={{ left: `${percent(marker.time)}%` }}
               title={`${marker.label} - ${formatDuration(marker.time)}`}
@@ -91,7 +91,7 @@ export function Timeline({ currentTime, duration, markers, loop, onSeek, onLoopC
                 aria-label={point === "start" ? "Loop in point" : "Loop out point"}
                 title={`Loop ${point === "start" ? "in" : "out"} ${formatTimecode(loop[point])} (drag, or ${point === "start" ? "[" : "]"} at current frame)`}
               >
-                <span className="mx-auto block h-full w-0.5 bg-[color:var(--color-accent)]" />
+                <span className="mx-auto block h-full w-0.5 bg-accent" />
               </button>
             ))
           : null}

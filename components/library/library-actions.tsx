@@ -6,7 +6,7 @@ import { getStorageStatus, type StorageStatus } from "@/lib/storage/session-stor
 import { cn, formatBytes } from "@/lib/utils";
 
 const iconButton =
-  "flex size-8 shrink-0 items-center justify-center border border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:border-white/20 hover:text-white";
+  "flex size-8 shrink-0 items-center justify-center border border-border text-text-muted hover:border-border-strong hover:text-text";
 
 /** Title that turns into an input; Enter/blur saves, Escape cancels. */
 export function InlineRename({
@@ -35,11 +35,11 @@ export function InlineRename({
   if (draft === null) {
     return (
       <div className={cn("flex min-w-0 items-center gap-1", className)}>
-        <h2 className="truncate text-sm font-semibold text-white">{value}</h2>
+        <h2 className="truncate text-sm font-semibold text-text">{value}</h2>
         <button
           type="button"
           onClick={() => setDraft(value)}
-          className="flex size-6 shrink-0 items-center justify-center text-[color:var(--color-muted)] hover:bg-white/[0.06] hover:text-white"
+          className="flex size-6 shrink-0 items-center justify-center text-text-muted hover:bg-surface-2 hover:text-text"
           aria-label={`Rename ${label}`}
           title="Rename"
         >
@@ -64,13 +64,13 @@ export function InlineRename({
         }}
         autoFocus
         aria-label={`New name for ${label}`}
-        className="h-7 min-w-0 flex-1 border border-[color:var(--color-accent)] bg-black/60 px-2 text-sm text-white outline-none"
+        className="h-7 min-w-0 flex-1 border border-accent bg-bg px-2 text-sm text-text"
       />
       <button
         type="button"
         onMouseDown={(event) => event.preventDefault()}
         onClick={commit}
-        className="flex size-6 shrink-0 items-center justify-center text-[color:var(--color-muted)] hover:text-white"
+        className="flex size-6 shrink-0 items-center justify-center text-text-muted hover:text-text"
         aria-label="Save name"
       >
         <Check className="size-3.5" />
@@ -108,7 +108,7 @@ export function ConfirmDeleteButton({
 
   return (
     <div className="flex items-center gap-1.5" role="group" aria-label={`Confirm deleting ${label}`}>
-      <span className="max-w-48 text-[11px] leading-tight text-[color:var(--color-muted)]">
+      <span className="max-w-48 text-xs leading-tight text-text-muted">
         {consequence}
       </span>
       <button
@@ -120,7 +120,7 @@ export function ConfirmDeleteButton({
           setBusy(false);
           setConfirming(false);
         }}
-        className="flex h-8 items-center gap-1 bg-red-500/90 px-2.5 text-xs font-semibold text-white hover:bg-red-500 disabled:opacity-60"
+        className="flex h-8 items-center gap-1 bg-bad px-2.5 text-xs font-semibold text-text hover:bg-bad/90 disabled:opacity-60"
       >
         <Trash2 className="size-3.5" />
         Delete
@@ -153,7 +153,7 @@ export function StorageMeter({ version }: { version: number }) {
 
   return (
     <div
-      className="flex items-center gap-2 text-[11px] text-[color:var(--color-muted)]"
+      className="flex items-center gap-2 text-xs text-text-muted"
       title={
         status.persisted
           ? "Persistent storage granted: the browser won't clear your videos automatically."
@@ -164,9 +164,9 @@ export function StorageMeter({ version }: { version: number }) {
       <span className="font-mono">
         {formatBytes(status.usage)} of {formatBytes(status.quota)}
       </span>
-      <span className="h-1 w-16 overflow-hidden bg-white/10">
+      <span className="h-1 w-16 overflow-hidden bg-border">
         <span
-          className="block h-full bg-[color:var(--color-accent)]"
+          className="block h-full bg-accent"
           style={{ width: `${Math.max(percent, 1)}%` }}
         />
       </span>

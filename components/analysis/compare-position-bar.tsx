@@ -47,7 +47,7 @@ export function ComparePositionBar({
   const matchedKeys = new Set(checkpoints.map((checkpoint) => checkpoint.key));
 
   return (
-    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border border-[color:var(--color-border)] bg-[#101113] px-2 py-1.5">
+    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded-panel border border-border bg-surface-1 px-2 py-1.5">
       <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
@@ -57,20 +57,20 @@ export function ComparePositionBar({
           className={cn(
             "flex size-7 shrink-0 items-center justify-center border",
             syncEnabled
-              ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/14 text-white"
-              : "border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:text-white",
+              ? "border-accent bg-accent-dim text-text"
+              : "border-border text-text-muted hover:text-text",
           )}
         >
           {syncEnabled ? <Link2 className="size-3.5" /> : <Link2Off className="size-3.5" />}
         </button>
-        <p className="truncate text-xs text-[color:var(--color-muted)]">
+        <p className="truncate text-xs text-text-muted">
           {syncSummary(syncEnabled, checkpoints)}
         </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <div className="flex items-center gap-1 overflow-x-auto" role="group" aria-label="Jump both panes to a position">
-          <span className="mr-1 hidden text-[10px] uppercase tracking-[0.14em] text-[color:var(--color-muted)] md:inline">
+          <span className="mr-1 hidden text-xs uppercase tracking-caps text-text-muted md:inline">
             Both to
           </span>
           {SWING_POSITIONS.map((label) => {
@@ -94,11 +94,11 @@ export function ComparePositionBar({
                       : `Mark ${label} in a swing first`
                 }
                 className={cn(
-                  "h-7 shrink-0 border px-2 text-[11px] pointer-coarse:h-9",
+                  "h-7 shrink-0 border px-2 text-xs pointer-coarse:h-9",
                   matched
-                    ? "border-white/20 text-white hover:border-[color:var(--color-accent)] hover:bg-[color:var(--color-accent)]/14"
-                    : "border-dashed border-white/12 text-[color:var(--color-muted)] hover:text-white",
-                  "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-[color:var(--color-muted)]",
+                    ? "border-border-strong text-text hover:border-accent hover:bg-accent-dim"
+                    : "border-dashed border-border text-text-muted hover:text-text",
+                  "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-text-muted",
                 )}
               >
                 {label}
@@ -116,7 +116,7 @@ export function ComparePositionBar({
               ? "Zoom both panes so the golfers appear the same size"
               : "Use Fit in each pane's header to box the golfer first"
           }
-          className="flex h-7 shrink-0 items-center gap-1 border border-white/20 px-2 text-[11px] text-white hover:border-[color:var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-7 shrink-0 items-center gap-1 border border-border-strong px-2 text-xs text-text hover:border-accent disabled:cursor-not-allowed disabled:opacity-40"
         >
           <ScanSearch className="size-3.5" />
           Fit both

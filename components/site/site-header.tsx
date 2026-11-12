@@ -21,17 +21,17 @@ const links = [
 
 export function SiteHeader({ currentPath }: SiteHeaderProps) {
   return (
-    <header className="sticky top-0 z-30 border-b border-[color:var(--color-border)] bg-[#0d0e10]/95 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-border bg-surface-1">
       <div className="mx-auto flex h-12 w-full max-w-[1600px] items-center justify-between gap-4 px-4 lg:px-6">
         <Link href="/" className="flex items-center gap-2.5">
-          <span className="flex size-8 items-center justify-center bg-[color:var(--color-accent)] text-[color:var(--color-ink)]">
+          <span className="flex size-8 items-center justify-center bg-accent text-bg">
             <Activity className="size-4" />
           </span>
           <div>
-            <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--color-muted)]">
+            <p className="text-xs uppercase tracking-caps text-text-muted">
               Swing Analyzer
             </p>
-            <p className="text-sm font-semibold text-white">Study</p>
+            <p className="text-sm font-semibold text-text">Study</p>
           </div>
         </Link>
 
@@ -47,8 +47,8 @@ export function SiteHeader({ currentPath }: SiteHeaderProps) {
                 className={cn(
                   "inline-flex h-8 items-center gap-2 border px-2.5 text-xs transition",
                   isActive
-                    ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/12 text-white"
-                    : "border-[color:var(--color-border)] bg-white/[0.03] text-[color:var(--color-muted)] hover:border-white/20 hover:text-white",
+                    ? "border-accent bg-accent-dim text-text"
+                    : "border-border bg-surface-2 text-text-muted hover:border-border-strong hover:text-text",
                 )}
               >
                 <Icon className="size-4" />

@@ -91,25 +91,25 @@ export function SessionSidebar({
   };
 
   return (
-    <aside className="flex h-full min-h-0 flex-col border-l border-[color:var(--color-border)] bg-[#0f1012]">
-      <div className="flex items-start justify-between gap-2 border-b border-[color:var(--color-border)] px-2.5 py-2.5">
+    <aside className="flex h-full min-h-0 flex-col border-l border-border bg-surface-1">
+      <div className="flex items-start justify-between gap-2 border-b border-border px-2.5 py-2.5">
         <div className="min-w-0">
-          <p className="text-[10px] uppercase tracking-[0.14em] text-[color:var(--color-muted)]">
+          <p className="text-xs uppercase tracking-caps text-text-muted">
             Inspector
           </p>
-          <h2 className="mt-1 truncate text-sm font-semibold text-white">{sessionTitle}</h2>
+          <h2 className="mt-1 truncate text-sm font-semibold text-text">{sessionTitle}</h2>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="flex size-8 shrink-0 items-center justify-center text-[color:var(--color-muted)] hover:bg-white/[0.06] hover:text-white xl:hidden"
+          className="flex size-8 shrink-0 items-center justify-center text-text-muted hover:bg-surface-2 hover:text-text xl:hidden"
           aria-label="Close inspector"
         >
           <X className="size-4" />
         </button>
       </div>
 
-      <div className="grid grid-cols-3 border-b border-[color:var(--color-border)]">
+      <div className="grid grid-cols-3 border-b border-border">
         {tabs.map((tab) => {
           const Icon = tab.icon;
 
@@ -119,10 +119,10 @@ export function SessionSidebar({
               type="button"
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "flex h-9 items-center justify-center gap-1.5 border-r border-[color:var(--color-border)] text-xs last:border-r-0",
+                "flex h-9 items-center justify-center gap-1.5 border-r border-border text-xs last:border-r-0",
                 activeTab === tab.id
-                  ? "bg-[color:var(--color-accent)]/14 text-white"
-                  : "text-[color:var(--color-muted)] hover:bg-white/[0.04] hover:text-white",
+                  ? "bg-accent-dim text-text"
+                  : "text-text-muted hover:bg-surface-2 hover:text-text",
               )}
             >
               <Icon className="size-3.5" />
@@ -137,7 +137,7 @@ export function SessionSidebar({
           <textarea
             value={notes}
             onChange={(event) => onNotesChange(event.target.value)}
-            className="h-full min-h-64 w-full resize-none border border-[color:var(--color-border)] bg-black/35 px-2.5 py-2.5 text-sm leading-6 text-slate-100 outline-none placeholder:text-slate-500 focus:border-[color:var(--color-accent)]"
+            className="h-full min-h-64 w-full resize-none border border-border bg-bg px-2.5 py-2.5 text-sm leading-6 text-text placeholder:text-text-muted focus:border-border-strong"
             placeholder="Session notes..."
           />
         ) : null}
@@ -148,7 +148,7 @@ export function SessionSidebar({
               <select
                 value={markerLabel}
                 onChange={(event) => setMarkerLabel(event.target.value)}
-                className="h-9 border border-[color:var(--color-border)] bg-black/35 px-2 text-sm text-white outline-none focus:border-[color:var(--color-accent)]"
+                className="h-9 border border-border bg-bg px-2 text-sm text-text focus:border-border-strong"
                 aria-label="Marker label"
               >
                 {markerLabels.map((label) => (
@@ -163,7 +163,7 @@ export function SessionSidebar({
                   value={customMarkerLabel}
                   onChange={(event) => setCustomMarkerLabel(event.target.value)}
                   placeholder="Custom marker name"
-                  className="h-9 border border-[color:var(--color-border)] bg-black/35 px-2 text-sm text-white outline-none placeholder:text-slate-600 focus:border-[color:var(--color-accent)]"
+                  className="h-9 border border-border bg-bg px-2 text-sm text-text placeholder:text-text-muted focus:border-border-strong"
                 />
               ) : null}
 
@@ -176,7 +176,7 @@ export function SessionSidebar({
                       : markerLabel,
                   )
                 }
-                className="inline-flex h-9 w-full items-center justify-center gap-2 bg-[color:var(--color-accent)] px-3 text-sm font-semibold text-[color:var(--color-ink)]"
+                className="inline-flex h-9 w-full items-center justify-center gap-2 bg-accent px-3 text-sm font-semibold text-bg"
               >
                 <BookmarkPlus className="size-4" />
                 Add at current time
@@ -184,7 +184,7 @@ export function SessionSidebar({
             </div>
 
             {markers.length === 0 ? (
-              <p className="pt-2 text-sm text-[color:var(--color-muted)]">
+              <p className="pt-2 text-sm text-text-muted">
                 No markers yet.
               </p>
             ) : (
@@ -193,7 +193,7 @@ export function SessionSidebar({
                 .map((marker) => (
                   <div
                     key={marker.id}
-                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border border-[color:var(--color-border)] bg-white/[0.025] px-2.5 py-2 hover:border-[color:var(--color-accent)] hover:bg-white/[0.04]"
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border border-border bg-surface-2 px-2.5 py-2 hover:border-accent hover:bg-surface-2"
                   >
                     {editingMarkerId === marker.id ? (
                       <input
@@ -209,7 +209,7 @@ export function SessionSidebar({
                             setEditingMarkerLabel("");
                           }
                         }}
-                        className="h-8 min-w-0 border border-[color:var(--color-accent)] bg-black/45 px-2 text-sm text-white outline-none"
+                        className="h-8 min-w-0 border border-accent bg-bg px-2 text-sm text-text"
                         autoFocus
                         aria-label="Rename marker"
                       />
@@ -219,10 +219,10 @@ export function SessionSidebar({
                         onClick={() => onSeekMarker(marker)}
                         className="min-w-0 text-left"
                       >
-                        <span className="block truncate text-sm font-medium text-white">
+                        <span className="block truncate text-sm font-medium text-text">
                           {marker.label}
                         </span>
-                        <span className="mt-0.5 block font-mono text-[11px] uppercase text-[color:var(--color-muted)]">
+                        <span className="mt-0.5 block font-mono text-xs uppercase text-text-muted">
                           {marker.paneId} / {formatDuration(marker.time)}
                         </span>
                       </button>
@@ -234,7 +234,7 @@ export function SessionSidebar({
                           <button
                             type="button"
                             onClick={commitMarkerRename}
-                            className="flex size-7 items-center justify-center text-[color:var(--color-muted)] hover:bg-white/[0.06] hover:text-white"
+                            className="flex size-7 items-center justify-center text-text-muted hover:bg-surface-2 hover:text-text"
                             aria-label="Save marker name"
                             title="Save marker name"
                           >
@@ -246,7 +246,7 @@ export function SessionSidebar({
                               setEditingMarkerId(null);
                               setEditingMarkerLabel("");
                             }}
-                            className="flex size-7 items-center justify-center text-[color:var(--color-muted)] hover:bg-white/[0.06] hover:text-white"
+                            className="flex size-7 items-center justify-center text-text-muted hover:bg-surface-2 hover:text-text"
                             aria-label="Cancel marker rename"
                             title="Cancel marker rename"
                           >
@@ -255,7 +255,7 @@ export function SessionSidebar({
                         </>
                       ) : (
                         <>
-                          <span className="font-mono text-xs text-[color:var(--color-accent)]">
+                          <span className="font-mono text-xs text-accent">
                             {formatDuration(marker.time)}
                           </span>
                           <button
@@ -264,7 +264,7 @@ export function SessionSidebar({
                               setEditingMarkerId(marker.id);
                               setEditingMarkerLabel(marker.label);
                             }}
-                            className="flex size-7 items-center justify-center text-[color:var(--color-muted)] hover:bg-white/[0.06] hover:text-white"
+                            className="flex size-7 items-center justify-center text-text-muted hover:bg-surface-2 hover:text-text"
                             aria-label={`Rename ${marker.label}`}
                             title="Rename marker"
                           >
@@ -273,7 +273,7 @@ export function SessionSidebar({
                           <button
                             type="button"
                             onClick={() => onDeleteMarker(marker.id)}
-                            className="flex size-7 items-center justify-center text-[color:var(--color-muted)] hover:bg-white/[0.06] hover:text-white"
+                            className="flex size-7 items-center justify-center text-text-muted hover:bg-surface-2 hover:text-text"
                             aria-label={`Delete ${marker.label}`}
                             title="Delete marker"
                           >
@@ -297,8 +297,8 @@ export function SessionSidebar({
                 className={cn(
                   "h-9 border px-3 text-sm font-medium",
                   syncEnabled
-                    ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/14 text-white"
-                    : "border-[color:var(--color-border)] bg-white/[0.03] text-[color:var(--color-muted)]",
+                    ? "border-accent bg-accent-dim text-text"
+                    : "border-border bg-surface-2 text-text-muted",
                 )}
               >
                 {syncEnabled ? "Sync on" : "Sync off"}
@@ -306,19 +306,19 @@ export function SessionSidebar({
               <button
                 type="button"
                 onClick={onSave}
-                className="inline-flex h-9 items-center justify-center gap-2 bg-[color:var(--color-accent)] px-3 text-sm font-semibold text-[color:var(--color-ink)]"
+                className="inline-flex h-9 items-center justify-center gap-2 bg-accent px-3 text-sm font-semibold text-bg"
               >
                 <Save className="size-4" />
                 Save
               </button>
             </div>
 
-            <div className="border border-[color:var(--color-border)] bg-white/[0.025] p-3">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--color-muted)]">
+            <div className="border border-border bg-surface-2 p-3">
+              <p className="text-xs uppercase tracking-caps text-text-muted">
                 State
               </p>
-              <p className="mt-2 text-sm text-white">Active pane: {activePaneId}</p>
-              <p className="mt-1 text-sm text-[color:var(--color-muted)]">
+              <p className="mt-2 text-sm text-text">Active pane: {activePaneId}</p>
+              <p className="mt-1 text-sm text-text-muted">
                 {lastSavedAt
                   ? `Saved locally ${new Date(lastSavedAt).toLocaleTimeString([], {
                       hour: "numeric",
@@ -329,12 +329,12 @@ export function SessionSidebar({
             </div>
 
             <div>
-              <p className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--color-muted)]">
+              <p className="text-xs uppercase tracking-caps text-text-muted">
                 Load reference
               </p>
               <div className="mt-2 space-y-2">
                 {references.length === 0 ? (
-                  <p className="text-xs text-[color:var(--color-muted)]">
+                  <p className="text-xs text-text-muted">
                     No references yet. Import a clip on the home screen with &ldquo;Save as
                     reference&rdquo; turned on.
                   </p>
@@ -344,16 +344,16 @@ export function SessionSidebar({
                     key={swing.id}
                     type="button"
                     onClick={() => onLoadReference(swing.id)}
-                    className="w-full border border-[color:var(--color-border)] bg-white/[0.025] p-2.5 text-left hover:border-[color:var(--color-accent)]"
+                    className="w-full border border-border bg-surface-2 p-2.5 text-left hover:border-accent"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-white">{swing.title}</p>
-                        <p className="truncate text-xs text-[color:var(--color-muted)]">
+                        <p className="truncate text-sm font-medium text-text">{swing.title}</p>
+                        <p className="truncate text-xs text-text-muted">
                           {swing.clubTag} / {swing.orientation}
                         </p>
                       </div>
-                      <span className="font-mono text-xs text-[color:var(--color-muted)]">
+                      <span className="font-mono text-xs text-text-muted">
                         {formatDuration(swing.duration)}
                       </span>
                     </div>

@@ -82,7 +82,7 @@ export function GolferBoxEditor({ initialBox, onCommit, onCancel }: GolferBoxEdi
     >
       {draft ? (
         <div
-          className="pointer-events-none absolute border-2 border-dashed border-[color:var(--color-accent)]"
+          className="pointer-events-none absolute border-2 border-dashed border-accent"
           style={{
             left: `${draft.x * 100}%`,
             top: `${draft.y * 100}%`,
@@ -93,17 +93,17 @@ export function GolferBoxEditor({ initialBox, onCommit, onCancel }: GolferBoxEdi
           }}
         />
       ) : (
-        <div className="pointer-events-none absolute inset-0 bg-black/45" />
+        <div className="pointer-events-none absolute inset-0 bg-bg" />
       )}
 
       {!dragging ? (
-        <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-2 bg-black/75 px-2.5 py-1.5 text-xs text-white">
+        <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-2 bg-bg/75 px-2.5 py-1.5 text-xs text-text">
           <span>Drag a box around the golfer, head to feet</span>
           <button
             type="button"
             onPointerDown={(event) => event.stopPropagation()}
             onClick={onCancel}
-            className="border border-white/20 px-2 py-0.5 text-[11px] hover:border-white/40"
+            className="border border-border-strong px-2 py-0.5 text-xs hover:border-border-strong"
           >
             Cancel
           </button>

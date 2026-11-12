@@ -225,13 +225,13 @@ export function SwingHub() {
   return (
     <main className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 py-4 lg:px-6">
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="border border-[color:var(--color-border)] bg-[#0f1012] p-3">
+        <div className="rounded-panel border border-border bg-surface-1 p-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-[10px] uppercase tracking-[0.16em] text-[color:var(--color-muted)]">
+              <p className="text-xs uppercase tracking-caps text-text-muted">
                 Swing library
               </p>
-              <h1 className="mt-1 text-xl font-semibold text-white">Recent swings</h1>
+              <h1 className="mt-1 text-xl font-semibold text-text">Recent swings</h1>
               <div className="mt-1.5">
                 <StorageMeter version={storageVersion} />
               </div>
@@ -239,7 +239,7 @@ export function SwingHub() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex h-9 items-center gap-2 bg-[color:var(--color-accent)] px-3 text-sm font-semibold text-[color:var(--color-ink)]"
+              className="inline-flex h-9 items-center gap-2 bg-accent px-3 text-sm font-semibold text-bg"
             >
               <UploadCloud className="size-4" />
               Import swing
@@ -260,21 +260,21 @@ export function SwingHub() {
           </div>
         </div>
 
-        <div className="border border-[color:var(--color-border)] bg-[#0f1012] p-3">
-          <p className="text-[10px] uppercase tracking-[0.16em] text-[color:var(--color-muted)]">
+        <div className="rounded-panel border border-border bg-surface-1 p-3">
+          <p className="text-xs uppercase tracking-caps text-text-muted">
             Quick actions
           </p>
           <div className="mt-2 grid grid-cols-2 gap-2">
             <Link
               href={`/analysis/${recentSessions[0]?.id ?? "sample-session"}`}
-              className="flex h-9 items-center justify-center gap-2 border border-[color:var(--color-border)] text-xs text-white hover:border-[color:var(--color-accent)]"
+              className="flex h-9 items-center justify-center gap-2 border border-border text-xs text-text hover:border-accent"
             >
               <FolderOpen className="size-4" />
               Open latest
             </Link>
             <Link
               href={`/analysis/${recentSessions[0]?.id ?? "sample-session"}?compare=true`}
-              className="flex h-9 items-center justify-center gap-2 border border-[color:var(--color-border)] text-xs text-white hover:border-[color:var(--color-accent)]"
+              className="flex h-9 items-center justify-center gap-2 border border-border text-xs text-text hover:border-accent"
             >
               <Columns2 className="size-4" />
               Compare
@@ -284,8 +284,8 @@ export function SwingHub() {
       </section>
 
       {selectedFile ? (
-        <section className="grid gap-3 border border-[color:var(--color-accent)] bg-[#111214] p-3 xl:grid-cols-[320px_minmax(0,1fr)]">
-          <div className="overflow-hidden bg-black">
+        <section className="grid gap-3 rounded-panel border border-accent bg-surface-1 p-3 xl:grid-cols-[320px_minmax(0,1fr)]">
+          <div className="overflow-hidden bg-bg">
             {previewUrl ? (
               <video src={previewUrl} className="aspect-video w-full object-contain" muted playsInline />
             ) : null}
@@ -294,18 +294,18 @@ export function SwingHub() {
           <div>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.16em] text-[color:var(--color-muted)]">
+                <p className="text-xs uppercase tracking-caps text-text-muted">
                   Import setup
                 </p>
-                <h2 className="mt-1 text-base font-semibold text-white">{selectedFile.name}</h2>
-                <p className="mt-1 text-sm text-[color:var(--color-muted)]">
+                <h2 className="mt-1 text-base font-semibold text-text">{selectedFile.name}</h2>
+                <p className="mt-1 text-sm text-text-muted">
                   {metadata ? formatDuration(metadata.duration) : "Reading video"} / local browser library
                 </p>
               </div>
               <button
                 type="button"
                 onClick={handleCancelImport}
-                className="flex size-8 items-center justify-center border border-[color:var(--color-border)] text-[color:var(--color-muted)] hover:text-white"
+                className="flex size-8 items-center justify-center border border-border text-text-muted hover:text-text"
                 aria-label="Cancel import"
               >
                 <X className="size-4" />
@@ -323,22 +323,22 @@ export function SwingHub() {
 
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               <label className="block">
-                <span className="text-xs text-[color:var(--color-muted)]">
+                <span className="text-xs text-text-muted">
                   {saveAsReference ? "Reference name" : "Session name"}
                 </span>
                 <input
                   value={sessionName}
                   onChange={(event) => setSessionName(event.target.value)}
-                  className="mt-1 h-9 w-full border border-[color:var(--color-border)] bg-black/35 px-2.5 text-sm text-white outline-none focus:border-[color:var(--color-accent)]"
+                  className="mt-1 h-9 w-full border border-border bg-bg px-2.5 text-sm text-text focus:border-border-strong"
                 />
               </label>
 
               <label className="block">
-                <span className="text-xs text-[color:var(--color-muted)]">Club</span>
+                <span className="text-xs text-text-muted">Club</span>
                 <select
                   value={club}
                   onChange={(event) => setClub(event.target.value)}
-                  className="mt-1 h-9 w-full border border-[color:var(--color-border)] bg-black/35 px-2.5 text-sm text-white outline-none focus:border-[color:var(--color-accent)]"
+                  className="mt-1 h-9 w-full border border-border bg-bg px-2.5 text-sm text-text focus:border-border-strong"
                 >
                   {clubOptions.map((option) => (
                     <option key={option} value={option}>
@@ -349,7 +349,7 @@ export function SwingHub() {
               </label>
 
               <fieldset>
-                <legend className="text-xs text-[color:var(--color-muted)]">View angle</legend>
+                <legend className="text-xs text-text-muted">View angle</legend>
                 <div className="mt-1 grid grid-cols-2 gap-2">
                   {(["face-on", "down-the-line"] as SwingOrientation[]).map((option) => (
                     <button
@@ -358,8 +358,8 @@ export function SwingHub() {
                       onClick={() => setOrientation(option)}
                       className={`h-9 border px-3 text-sm ${
                         orientation === option
-                          ? "border-[color:var(--color-accent)] bg-[color:var(--color-accent)]/14 text-white"
-                          : "border-[color:var(--color-border)] text-[color:var(--color-muted)]"
+                          ? "border-accent bg-accent-dim text-text"
+                          : "border-border text-text-muted"
                       }`}
                     >
                       {option === "face-on" ? "Face-on" : "Down-the-line"}
@@ -369,9 +369,9 @@ export function SwingHub() {
               </fieldset>
 
               <label className="block">
-                <span className="text-xs text-[color:var(--color-muted)]">
+                <span className="text-xs text-text-muted">
                   Frame rate{" "}
-                  <span className="text-[10px]">
+                  <span className="text-xs">
                     {fpsSource === "detecting"
                       ? "(detecting…)"
                       : fpsSource === "detected"
@@ -387,7 +387,7 @@ export function SwingHub() {
                     setFps(Number(event.target.value));
                     setFpsSource("manual");
                   }}
-                  className="mt-1 h-9 w-full border border-[color:var(--color-border)] bg-black/35 px-2.5 text-sm text-white outline-none focus:border-[color:var(--color-accent)]"
+                  className="mt-1 h-9 w-full border border-border bg-bg px-2.5 text-sm text-text focus:border-border-strong"
                 >
                   {frameRateChoices(fps).map((option) => (
                     <option key={option} value={option}>
@@ -398,26 +398,26 @@ export function SwingHub() {
               </label>
 
               <label className="block">
-                <span className="text-xs text-[color:var(--color-muted)]">Notes / tags</span>
+                <span className="text-xs text-text-muted">Notes / tags</span>
                 <input
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
                   placeholder="Tempo, takeaway, impact..."
-                  className="mt-1 h-9 w-full border border-[color:var(--color-border)] bg-black/35 px-2.5 text-sm text-white outline-none placeholder:text-slate-600 focus:border-[color:var(--color-accent)]"
+                  className="mt-1 h-9 w-full border border-border bg-bg px-2.5 text-sm text-text placeholder:text-text-muted focus:border-border-strong"
                 />
               </label>
             </div>
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <label className="flex items-center gap-2 text-sm text-white">
+              <label className="flex items-center gap-2 text-sm text-text">
                 <input
                   type="checkbox"
                   checked={saveAsReference}
                   onChange={(event) => setSaveAsReference(event.target.checked)}
-                  className="size-4 accent-[color:var(--color-accent)]"
+                  className="size-4 accent-accent"
                 />
                 Save as reference
-                <span className="text-xs text-[color:var(--color-muted)]">
+                <span className="text-xs text-text-muted">
                   (a model swing to compare against)
                 </span>
               </label>
@@ -425,7 +425,7 @@ export function SwingHub() {
                 type="button"
                 onClick={handleCreateSession}
                 disabled={isImporting || Boolean(metadata?.problem)}
-                className="inline-flex h-9 items-center gap-2 bg-[color:var(--color-accent)] px-3 text-sm font-semibold text-[color:var(--color-ink)] disabled:opacity-60"
+                className="inline-flex h-9 items-center gap-2 bg-accent px-3 text-sm font-semibold text-bg disabled:opacity-60"
               >
                 <Play className="size-4" />
                 {saveAsReference ? "Save reference" : "Open analysis"}
@@ -436,24 +436,24 @@ export function SwingHub() {
       ) : null}
 
       {savedReferenceTitle ? (
-        <p className="border border-[color:var(--color-border)] bg-[#0f1012] px-3 py-2 text-sm text-white">
+        <p className="border border-border bg-surface-1 px-3 py-2 text-sm text-text">
           Saved &ldquo;{savedReferenceTitle}&rdquo; to{" "}
-          <Link href="/library?tab=references" className="text-[color:var(--color-accent)] underline">
+          <Link href="/library?tab=references" className="text-accent underline">
             References
           </Link>
           . Load it into the compare pane from any session.
         </p>
       ) : null}
 
-      <section className="border border-[color:var(--color-border)] bg-[#0f1012]">
-        <div className="grid grid-cols-[minmax(0,1fr)_110px_100px_230px] border-b border-[color:var(--color-border)] px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-[color:var(--color-muted)] max-lg:hidden">
+      <section className="overflow-hidden rounded-panel border border-border bg-surface-1">
+        <div className="grid grid-cols-[minmax(0,1fr)_110px_100px_230px] border-b border-border px-3 py-2 text-xs uppercase tracking-caps text-text-muted max-lg:hidden">
           <span>Swing</span>
           <span>Club</span>
           <span>View</span>
           <span className="text-right">Actions</span>
         </div>
 
-        <div className="divide-y divide-[color:var(--color-border)]">
+        <div className="divide-y divide-border">
           {recentSessions.map((session) => {
             const video = videoById.get(session.primaryVideoId);
 
@@ -463,7 +463,7 @@ export function SwingHub() {
                 className="grid gap-3 px-3 py-2.5 lg:grid-cols-[minmax(0,1fr)_110px_100px_230px] lg:items-center"
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex aspect-video w-24 shrink-0 items-center justify-center overflow-hidden bg-black text-[color:var(--color-accent)]">
+                  <div className="flex aspect-video w-24 shrink-0 items-center justify-center overflow-hidden bg-bg text-accent">
                     {video?.thumbnailUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -481,27 +481,27 @@ export function SwingHub() {
                       label="session"
                       onSave={(title) => void renameStoredSession(session.id, title).then(library.reload)}
                     />
-                    <p className="mt-1 truncate text-xs text-[color:var(--color-muted)]">
+                    <p className="mt-1 truncate text-xs text-text-muted">
                       {formatDate(session.lastOpenedAt)} / {video ? formatDuration(video.duration) : "0:00"} /{" "}
                       {session.snapshotMarkers.length} markers
                     </p>
                   </div>
                 </div>
 
-                <p className="text-sm text-[color:var(--color-muted)]">{video?.clubTag ?? "Swing"}</p>
-                <p className="text-sm text-[color:var(--color-muted)]">
+                <p className="text-sm text-text-muted">{video?.clubTag ?? "Swing"}</p>
+                <p className="text-sm text-text-muted">
                   {video?.orientation === "down-the-line" ? "DTL" : "Face-on"}
                 </p>
                 <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
                   <Link
                     href={`/analysis/${session.id}`}
-                    className="flex h-8 items-center justify-center border border-[color:var(--color-border)] px-3 text-xs text-white hover:border-[color:var(--color-accent)]"
+                    className="flex h-8 items-center justify-center border border-border px-3 text-xs text-text hover:border-accent"
                   >
                     Open
                   </Link>
                   <Link
                     href={`/analysis/${session.id}?compare=true`}
-                    className="flex h-8 items-center justify-center border border-[color:var(--color-border)] px-3 text-xs text-white hover:border-[color:var(--color-accent)]"
+                    className="flex h-8 items-center justify-center border border-border px-3 text-xs text-text hover:border-accent"
                   >
                     Compare
                   </Link>

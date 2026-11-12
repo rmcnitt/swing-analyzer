@@ -30,6 +30,7 @@ import {
   translateGeometry,
 } from "@/lib/analysis/shape-edit";
 import { cn } from "@/lib/utils";
+import { color as tokenColor } from "@/lib/design/tokens";
 
 interface AnnotationCanvasProps {
   paneId: PaneId;
@@ -425,7 +426,7 @@ export function AnnotationCanvas({
       onMouseEnter: () => canEdit && setCursor("move"),
       onMouseLeave: () => setCursor(""),
       hitStrokeWidth: Math.max(16, annotation.style.strokeWidth + 10),
-      shadowColor: isSelected ? "#f97316" : undefined,
+      shadowColor: isSelected ? tokenColor.accent : undefined,
       shadowBlur: isSelected ? 8 : 0,
       shadowOpacity: isSelected ? 0.85 : 0,
     };
@@ -552,8 +553,8 @@ export function AnnotationCanvas({
                   x={point.x}
                   y={point.y}
                   radius={6}
-                  fill="#ffffff"
-                  stroke="#f97316"
+                  fill={tokenColor.text}
+                  stroke={tokenColor.accent}
                   strokeWidth={2}
                   hitStrokeWidth={18}
                   onPointerDown={(event) => startEdit(event, selected, index)}
