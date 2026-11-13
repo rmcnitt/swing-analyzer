@@ -497,7 +497,7 @@ function WorkspaceView({
   const handleUploadVideo = async (paneId: PaneId, file: File) => {
     // Temporary URL just for probing; the playable URL comes from IndexedDB via useStoredVideos.
     const probeUrl = URL.createObjectURL(file);
-    const metadata = await readVideoMetadata(probeUrl);
+    const metadata = await readVideoMetadata(probeUrl, file);
 
     if (metadata.problem) {
       URL.revokeObjectURL(probeUrl);
@@ -507,7 +507,7 @@ function WorkspaceView({
 
     setUploadProblem(null);
     const thumbnail = await createVideoThumbnail(probeUrl);
-    const detectedFps = await detectVideoFps(probeUrl);
+    const detectedFps = metadata.fps ?? (await detectVideoFps(probeUrl));
     URL.revokeObjectURL(probeUrl);
     const asset: VideoAsset = {
       id: createId("upload"),

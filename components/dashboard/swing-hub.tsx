@@ -15,7 +15,7 @@ import type { AnalysisSession, SwingOrientation, VideoAsset } from "@/lib/types"
 import { createId, formatDuration } from "@/lib/utils";
 import { PlaybackProblemNotice } from "@/components/analysis/playback-problem-notice";
 import { DEFAULT_FPS, frameRateChoices } from "@/lib/analysis/frames";
-import { createVideoThumbnail, detectVideoFps, readVideoMetadata, type VideoFileMetadata } from "@/lib/video/media";
+import { createVideoThumbnail, detectVideoFps, readVideoMetadata, VIDEO_ACCEPT, type VideoFileMetadata } from "@/lib/video/media";
 
 const clubOptions = [
   "Driver",
@@ -85,18 +85,27 @@ export function SwingHub() {
 
     const nextPreviewUrl = URL.createObjectURL(file);
     previewUrlRef.current = nextPreviewUrl;
-    const nextMetadata = await readVideoMetadata(nextPreviewUrl);
     const baseName = file.name.replace(/\.[^.]+$/, "");
 
+    // Open the import setup right away; metadata fills in when it's read.
     setSelectedFile(file);
     setPreviewUrl(nextPreviewUrl);
-    setMetadata(nextMetadata);
+    setMetadata(null);
     setSessionName(baseName || "Range swing");
     setSavedReferenceTitle(null);
     setFps(DEFAULT_FPS);
     setFpsSource("detecting");
 
-    const detected = await detectVideoFps(nextPreviewUrl);
+    const nextMetadata = await readVideoMetadata(nextPreviewUrl, file);
+
+    if (previewUrlRef.current !== nextPreviewUrl) {
+      return;
+    }
+
+    setMetadata(nextMetadata);
+
+    // The file header's frame rate is exact; measuring playback is the fallback.
+    const detected = nextMetadata.fps ?? (nextMetadata.problem ? null : await detectVideoFps(nextPreviewUrl));
 
     // Ignore results for a file the user has since replaced or cancelled.
     if (previewUrlRef.current !== nextPreviewUrl) {
@@ -244,7 +253,7 @@ export function SwingHub() {
             <input
               ref={fileInputRef}
               type="file"
-              accept="video/*"
+              accept={VIDEO_ACCEPT}
               className="hidden"
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -426,7 +435,7 @@ export function SwingHub() {
                 <button
                   type="button"
                   onClick={handleCreateSession}
-                  disabled={isImporting || Boolean(metadata?.problem)}
+                  disabled={isImporting || !metadata || Boolean(metadata.problem)}
                   className="inline-flex h-9 items-center gap-2 bg-accent px-3 text-sm font-semibold text-bg disabled:opacity-60"
                 >
                   <Play className="size-4" />

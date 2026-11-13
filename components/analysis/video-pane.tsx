@@ -44,7 +44,7 @@ import { SPEED_OPTIONS } from "@/lib/analysis/shortcuts";
 import type { SyncGroup, SyncMedia } from "@/lib/analysis/sync-group";
 import type { WorkspaceLayout } from "@/lib/analysis/workspace-layout";
 import { layoutPoint } from "@/lib/analysis/screen-rotation";
-import { detectVideoFps } from "@/lib/video/media";
+import { detectVideoFps, VIDEO_ACCEPT } from "@/lib/video/media";
 import { classifyMediaError, type PlaybackProblem } from "@/lib/video/playback-errors";
 import { createTimeStore, type TimeStore } from "@/lib/video/time-store";
 import { PlaybackProblemNotice } from "@/components/analysis/playback-problem-notice";
@@ -822,7 +822,7 @@ export function VideoPane({
       </span>
       <input
         type="file"
-        accept="video/*"
+        accept={VIDEO_ACCEPT}
         className="sr-only"
         onChange={(event) => {
           const file = event.target.files?.[0];

@@ -1,46 +1,92 @@
 "use client";
 
 import { estimateFpsFromMediaTimes } from "@/lib/analysis/frames";
+import { readBlobContainerMetadata } from "@/lib/video/container";
 import { classifyMediaError, type PlaybackProblem } from "@/lib/video/playback-errors";
 
 export interface VideoFileMetadata {
   duration: number;
   width: number;
   height: number;
+  /** Frame rate read from the file's header, when it has one (MP4/MOV). */
+  fps?: number;
   /** Set when this browser can't play the file (no picture, or a media error). */
   problem?: PlaybackProblem;
 }
 
-/** Reads duration and intrinsic dimensions from a video URL (object URL or same-origin path). */
-export function readVideoMetadata(url: string) {
-  return new Promise<VideoFileMetadata>((resolve) => {
+/** File-input filter. Explicit .mov/.m4v so iPhone camera-roll clips are never greyed out. */
+export const VIDEO_ACCEPT = "video/*,.mp4,.mov,.m4v,video/quicktime";
+
+// How long to wait for the browser to report metadata before trusting the file header instead.
+const METADATA_TIMEOUT_MS = 5000;
+
+/** Asks a detached <video> for duration and display size; null if it never answers. */
+function probeElementMetadata(url: string, timeoutMs: number) {
+  return new Promise<VideoFileMetadata | null>((resolve) => {
     const element = document.createElement("video");
+    const done = (result: VideoFileMetadata | null) => {
+      window.clearTimeout(timer);
+      element.onloadedmetadata = null;
+      element.onerror = null;
+      element.removeAttribute("src");
+      element.load();
+      resolve(result);
+    };
+    // iOS Safari may never load a detached video (always in Low Power Mode), so don't wait forever.
+    const timer = window.setTimeout(() => done(null), timeoutMs);
 
-    element.preload = "metadata";
-    element.src = url;
-
-    element.onloadedmetadata = () => {
-      resolve({
+    element.onloadedmetadata = () =>
+      done({
         duration: element.duration || 0,
         width: element.videoWidth || 0,
         height: element.videoHeight || 0,
         // Unsupported video codecs (e.g. HEVC in Chrome) can still expose an audio-only track.
         problem: element.videoWidth ? undefined : "unsupported",
       });
-      element.src = "";
-    };
+    element.onerror = () =>
+      done({ duration: 0, width: 0, height: 0, problem: classifyMediaError(element.error?.code) });
 
-    element.onerror = () => {
-      resolve({ duration: 0, width: 0, height: 0, problem: classifyMediaError(element.error?.code) });
-      element.src = "";
-    };
+    element.muted = true;
+    element.playsInline = true;
+    element.preload = "metadata";
+    element.src = url;
+    element.load();
   });
 }
 
+/**
+ * Reads duration and display size for a video URL (object URL or same-origin path). Pass the
+ * File too: its MP4/MOV header supplies the frame rate, and stands in for the browser when the
+ * browser won't load the clip in the background (iPhone camera-roll imports).
+ */
+export async function readVideoMetadata(url: string, file?: Blob): Promise<VideoFileMetadata> {
+  const [element, header] = await Promise.all([
+    probeElementMetadata(url, METADATA_TIMEOUT_MS),
+    file ? readBlobContainerMetadata(file) : Promise.resolve(null),
+  ]);
+  const fps = header?.fps ?? undefined;
+
+  if (element) {
+    return { ...element, fps };
+  }
+
+  if (header) {
+    return { duration: header.duration, width: header.width, height: header.height, fps };
+  }
+
+  return { duration: 0, width: 0, height: 0, problem: "unsupported" };
+}
+
 /** Captures a small JPEG poster frame from near the start of the video. */
-export function createVideoThumbnail(url: string) {
+export function createVideoThumbnail(url: string, timeoutMs = 6000) {
   return new Promise<Blob | null>((resolve) => {
     const video = document.createElement("video");
+    // A missing thumbnail is fine; a stalled import isn't (iOS may never load a detached video).
+    const timer = window.setTimeout(() => {
+      video.removeAttribute("src");
+      video.load();
+      resolve(null);
+    }, timeoutMs);
 
     video.crossOrigin = "anonymous";
     video.muted = true;
@@ -49,6 +95,7 @@ export function createVideoThumbnail(url: string) {
     video.src = url;
 
     const capture = () => {
+      window.clearTimeout(timer);
       const width = video.videoWidth || 640;
       const height = video.videoHeight || 360;
       const canvas = document.createElement("canvas");
@@ -73,7 +120,11 @@ export function createVideoThumbnail(url: string) {
       video.currentTime = Math.min(0.1, video.duration || 0);
     };
     video.onseeked = capture;
-    video.onerror = () => resolve(null);
+    video.onerror = () => {
+      window.clearTimeout(timer);
+      resolve(null);
+    };
+    video.load();
   });
 }
 
