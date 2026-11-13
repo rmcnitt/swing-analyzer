@@ -91,28 +91,37 @@ async function runStore<T>(
   return result;
 }
 
+/** Writes one record. Resolves false (never hangs, never throws) if the write fails or aborts. */
 async function putRecord<T>(storeName: StoreName, value: T, key?: IDBValidKey) {
   const db = await openLocalDb();
 
   if (!db) {
-    return;
+    return false;
   }
 
-  await new Promise<void>((resolve) => {
-    const transaction = db.transaction(storeName, "readwrite");
-    const store = transaction.objectStore(storeName);
+  const ok = await new Promise<boolean>((resolve) => {
+    try {
+      const transaction = db.transaction(storeName, "readwrite");
+      const store = transaction.objectStore(storeName);
 
-    if (key) {
-      store.put(value, key);
-    } else {
-      store.put(value);
+      transaction.oncomplete = () => resolve(true);
+      transaction.onerror = () => resolve(false);
+      // WebKit aborts (without completing) when a large blob can't be stored or the quota is hit.
+      transaction.onabort = () => resolve(false);
+
+      if (key) {
+        store.put(value, key);
+      } else {
+        store.put(value);
+      }
+    } catch {
+      // DataCloneError and friends throw synchronously.
+      resolve(false);
     }
-
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => resolve();
   });
 
   db.close();
+  return ok;
 }
 
 async function getAllRecords<T>(storeName: StoreName) {
@@ -221,24 +230,47 @@ export async function loadStoredSessions() {
     .filter((session): session is AnalysisSession => Boolean(session));
 }
 
+export class VideoStorageError extends Error {}
+
+// Re-reading the file into memory works around WebKit failing to store photo-library Files
+// directly, but a huge clip in memory can crash a phone tab, so only for files under this size.
+const IN_MEMORY_RETRY_MAX_BYTES = 400 * 1024 * 1024;
+
+/**
+ * Saves a video (and its file/thumbnail). The file is stored first so a failed write never
+ * leaves a library entry without its video. Throws VideoStorageError if the file can't be stored.
+ */
 export async function saveStoredVideo(
   video: VideoAsset,
   file?: Blob,
   thumbnail?: Blob | null,
 ) {
-  await putRecord(videoStoreName, {
-    ...video,
-    url: file ? `indexeddb://${video.id}` : video.url,
-    thumbnailUrl: thumbnail ? `indexeddb-thumbnail://${video.id}` : video.thumbnailUrl,
-  });
-
   if (file) {
-    await putRecord(videoBlobStoreName, file, video.id);
+    let stored = await putRecord(videoBlobStoreName, file, video.id);
+
+    if (!stored && file.size <= IN_MEMORY_RETRY_MAX_BYTES) {
+      try {
+        const copy = new Blob([await file.arrayBuffer()], { type: file.type });
+        stored = await putRecord(videoBlobStoreName, copy, video.id);
+      } catch {
+        stored = false;
+      }
+    }
+
+    if (!stored) {
+      throw new VideoStorageError(`Couldn't store video ${video.id} (${file.size} bytes)`);
+    }
   }
 
   if (thumbnail) {
     await putRecord(thumbnailBlobStoreName, thumbnail, video.id);
   }
+
+  await putRecord(videoStoreName, {
+    ...video,
+    url: file ? `indexeddb://${video.id}` : video.url,
+    thumbnailUrl: thumbnail ? `indexeddb-thumbnail://${video.id}` : video.thumbnailUrl,
+  });
 }
 
 export async function updateStoredVideoMetadata(

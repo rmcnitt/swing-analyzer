@@ -528,7 +528,14 @@ function WorkspaceView({
       createdAt: new Date().toISOString(),
     };
 
-    await saveStoredVideo(asset, file, thumbnail);
+    try {
+      await saveStoredVideo(asset, file, thumbnail);
+    } catch (error) {
+      console.error(error);
+      setUploadProblem({ problem: "storage", fileName: file.name, mimeType: file.type });
+      return;
+    }
+
     void requestPersistentStorage();
     await reloadVideos();
     handleSelectVideo(paneId, asset.id);

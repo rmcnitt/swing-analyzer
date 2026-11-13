@@ -1,4 +1,5 @@
-export type PlaybackProblem = "unsupported" | "decode" | "network" | "missing";
+/** "storage": the browser refused to save the imported file (too large for its quota, or a WebKit blob bug). */
+export type PlaybackProblem = "unsupported" | "decode" | "network" | "missing" | "storage";
 
 // HTMLMediaElement MediaError codes (MediaError.MEDIA_ERR_*), inlined so this stays DOM-free.
 const MEDIA_ERR_ABORTED = 1;
@@ -45,6 +46,12 @@ export function describePlaybackProblem(
         title: "Video data is missing",
         detail:
           "This clip's file is no longer stored in this browser (the browser may have cleared it to free space). Import the clip again.",
+      };
+    case "storage":
+      return {
+        title: "The video couldn't be saved",
+        detail:
+          "This browser couldn't store the clip, usually because it's too large for the space it allows. Trim it to just the swing (a few seconds) in Photos and import it again.",
       };
     case "network":
       return {

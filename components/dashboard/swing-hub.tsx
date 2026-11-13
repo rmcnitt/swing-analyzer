@@ -168,7 +168,15 @@ export function SwingHub() {
     };
     const thumbnail = await createVideoThumbnail(previewUrl);
 
-    await saveStoredVideo(video, selectedFile, thumbnail);
+    try {
+      await saveStoredVideo(video, selectedFile, thumbnail);
+    } catch (error) {
+      console.error(error);
+      setMetadata((current) => (current ? { ...current, problem: "storage" } : current));
+      setIsImporting(false);
+      return;
+    }
+
     void requestPersistentStorage();
 
     if (saveAsReference) {
@@ -298,7 +306,14 @@ export function SwingHub() {
           <section className="grid gap-3 rounded-panel border border-accent bg-surface-1 p-3 xl:grid-cols-[320px_minmax(0,1fr)]">
             <div className="overflow-hidden bg-bg">
               {previewUrl ? (
-                <video src={previewUrl} className="aspect-video w-full object-contain" muted playsInline />
+                <video
+                  // The #t hint makes iOS paint the first frame instead of a black box.
+                  src={`${previewUrl}#t=0.001`}
+                  className="aspect-video w-full object-contain"
+                  muted
+                  playsInline
+                  preload="metadata"
+                />
               ) : null}
             </div>
 

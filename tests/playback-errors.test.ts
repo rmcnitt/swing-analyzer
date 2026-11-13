@@ -34,4 +34,11 @@ describe("describePlaybackProblem", () => {
     expect(detail).not.toContain("HEVC");
     expect(detail).toContain("H.264");
   });
+
+  it("tells the user to trim a clip the browser couldn't store", () => {
+    const { title, detail } = describePlaybackProblem("storage", { fileName: "IMG_4021.MOV" });
+
+    expect(title).toContain("saved");
+    expect(detail).toContain("Trim");
+  });
 });
